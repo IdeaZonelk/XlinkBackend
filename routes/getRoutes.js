@@ -157,6 +157,8 @@ router.get('/findAllProduct', productController.findAllProducts);
 
 router.get('/findproductByCode', productController.findProductById);
 
+router.get('/findProductByName', productController.searchProductByName);
+
 router.get('/findProductForUpdate/:id', productController.findProductForUpdate);
 
 router.get('/getBaseUnitForUpdate/:id', baseUnitController.getBaseUnitForUpdate);
