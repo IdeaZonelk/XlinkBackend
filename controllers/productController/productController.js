@@ -480,6 +480,90 @@ const searchProducts = async (req, res) => {
     }
 };
 
+
+const searchProductByName = async (req, res) => {
+    const { keyword, warehouse } = req.query;
+    const path = require('path');
+    
+    try {
+        if (!keyword) {
+            return res.status(400).json({ status: "error", message: "Keyword is required for search." });
+        }
+
+        // Escape special regex characters in the keyword
+        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Build base query to search by either code or name
+        const baseQuery = {
+            $or: [
+                { code: { $regex: new RegExp(`${escapedKeyword}`, 'i') } },
+                { name: { $regex: new RegExp(`${escapedKeyword}`, 'i') } }
+            ]
+        };
+
+        // If warehouse is specified, add warehouse condition
+        let finalQuery = baseQuery;
+        if (warehouse) {
+            finalQuery = {
+                ...baseQuery,
+                [`warehouse.${warehouse}`]: { $exists: true }
+            };
+        }
+
+        const products = await Product.find(finalQuery).limit(20);
+
+        if (!products || products.length === 0) {
+            return res.status(404).json({ status: "unsuccess", message: "No products found." });
+        }
+
+        // Helper function to properly format Map data
+        const formatMapToObject = (map) => {
+            if (!map) return {};
+            const obj = Object.fromEntries(map);
+            
+            // Convert nested Maps to objects
+            for (const key in obj) {
+                if (obj[key] && typeof obj[key] === 'object') {
+                    if (obj[key] instanceof Map) {
+                        obj[key] = Object.fromEntries(obj[key]);
+                    }
+                    // Handle nested variationValues if they exist
+                    if (obj[key].variationValues instanceof Map) {
+                        obj[key].variationValues = Object.fromEntries(obj[key].variationValues);
+                    }
+                }
+            }
+            return obj;
+        };
+
+        // Format each product in the array
+        const formattedProducts = products.map(product => {
+            const productObj = product.toObject();
+            
+            // Format warehouse data
+            let warehouseData = productObj.warehouse ? formatMapToObject(productObj.warehouse) : {};
+            
+            // If specific warehouse is requested, filter to just that warehouse
+            if (warehouse && warehouseData[warehouse]) {
+                warehouseData = { [warehouse]: warehouseData[warehouse] };
+            }
+
+            return {
+                ...productObj,
+                createdAt: productObj.createdAt.toISOString().slice(0, 10),
+                variationValues: productObj.variationValues ? formatMapToObject(productObj.variationValues) : {},
+                warehouse: warehouseData,
+                image: productObj.image ? `${req.protocol}://${req.get('host')}/uploads/product/${path.basename(productObj.image)}` : null,
+            };
+        });
+        console.log(formattedProducts)
+        return res.status(200).json({ status: "success", products: formattedProducts });
+    } catch (error) {
+        console.error("Search product error:", error);
+        return res.status(500).json({ status: "error", message: error.message });
+    }
+};
+
 const findProductForUpdate = async (req, res) => {
     const { id } = req.params; // Get product ID from request params
 
@@ -555,4 +639,4 @@ const findProductForUpdate = async (req, res) => {
     }
 };
 
-module.exports = { findAllProducts, updateProduct, deleteProduct, createProduct, findProductById, findProductForUpdate, searchProducts }
+module.exports = { findAllProducts, updateProduct, searchProductByName, deleteProduct, createProduct, findProductById, findProductForUpdate, searchProducts }
