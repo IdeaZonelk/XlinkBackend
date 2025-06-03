@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const newSuplier = new mongoose.Schema({
     username:{
         type:String,
-        required:true
+        sparse: true
     },
     name:{
         type:String,
@@ -14,7 +14,6 @@ const newSuplier = new mongoose.Schema({
     },
     nic:{
         type:String,
-        required:true,
     },
     mobile:{
         type:String,
@@ -23,15 +22,12 @@ const newSuplier = new mongoose.Schema({
     },
     country:{
         type:String,
-        required:true
     },
     city:{
         type:String,
-        required:true
     },
     address:{
         type:String,
-        required:true
     },
     createdAt: {
         type: Date,

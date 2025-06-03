@@ -31,7 +31,7 @@ const warehouseSchema = new mongoose.Schema({
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true },
-  brand: { type: String, required: true },
+  brand: { type: String,  },
   category: { type: String, required: true },
   barcode: { type: String },
   image: { type: String },
@@ -40,7 +40,7 @@ const productSchema = new mongoose.Schema({
   purchase: { type: String, required: true },
   ptype: { type: String, required: true },
   quantityLimit: { type: Number },
-  supplier: { type: String, required: true },
+  supplier: { type: String,  },
   warehouse: { type: Map, of: warehouseSchema },
   variation: { type: String },
   status: { type: String, default: 'Pending' },

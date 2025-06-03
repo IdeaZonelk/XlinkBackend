@@ -7,16 +7,24 @@ const createCustomer = async (req, res) => {
     const { username, name, nic, mobile, country, city, address } = req.body;
 
     // Validate input fields
-    if (!username || !name || !nic || !mobile || !country || !city || !address) {
+    if ( !name || !mobile ) {
         return res.status(400).json({
             message: 'All fields are required. Please provide username, name, dob, mobile, country, city, and address.',
             status: 'fail'
         });
     }
 
+    const mobileRegex = /^0\d{9}$/;
+    if (!mobileRegex.test(mobile)) {
+        return res.status(400).json({
+            message: 'Mobile number must start with "0" and be exactly 10 digits.',
+            status: 'fail'
+        });
+    }
+
     try {
         // Check if customer already exists by username
-        const existingCustomer = await Customer.findOne({ username });
+        const existingCustomer = await Customer.findOne({ name, mobile });
         if (existingCustomer) {
             return res.status(400).json({
                 message: 'Customer already exists.',
@@ -24,33 +32,26 @@ const createCustomer = async (req, res) => {
             });
         }
 
-        // Check if mobile number already exists
-        const existingMobileNumberChecking = await Customer.findOne({ mobile });
-        if (existingMobileNumberChecking) {
-            return res.status(400).json({
-                message: 'Mobile Number already exists.',
-                status: 'fail'
-            });
-        }
 
-        // Check if mobile number already exists
-        const existingNicNumberChecking = await Customer.findOne({ nic });
-        if (existingNicNumberChecking) {
-            return res.status(400).json({
-                message: 'NIC Number already exists.',
-                status: 'fail'
-            });
-        }
+        // Optionally validate NIC if provided
+        if (nic) {
+            const newNICRegex = /^\d{12}$/;         // 12 digits only
+            const oldNICRegex = /^\d{9}[VXvx]$/;    // 9 digits + 'V' or 'X'
 
-        // Validate NIC length
-        const newNICRegex = /^\d{12}$/;         // 12 digits only
-        const oldNICRegex = /^\d{9}[VXvx]$/;    // 9 digits + 'V' or 'X'
+            if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
+                return res.status(400).json({
+                    message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
+                    status: 'fail'
+                });
+            }
 
-        if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
-            return res.status(400).json({
-                message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
-                status: 'fail'
-            });
+            const existingNIC = await Customer.findOne({ nic });
+            if (existingNIC) {
+                return res.status(400).json({
+                    message: 'NIC number already exists.',
+                    status: 'fail'
+                });
+            }
         }
 
 
@@ -234,91 +235,100 @@ const getCustomerForUpdate = async (req, res) => {
 
 //Update the customer details
 const UpdateCustomer = async (req, res) => {
-    const { id, username, name, nic, mobile, country, city, address } = req.body;
+    const { id, username = '', name, nic = '', mobile, country = '', city = '', address = '' } = req.body;
+
     if (!id) {
-        return res.status(400).json({ message: 'ID is required' });
+        return res.status(400).json({ message: 'Customer ID is required', status: 'fail' });
     }
-    if (!username || !name || !nic || !mobile || !country || !city || !address) {
+
+    if (!name || !mobile) {
         return res.status(400).json({
-            message: 'All fields are required. Please provide username, name, dob, mobile, country, city, and address.'
+            message: 'Name and Mobile number are required.',
+            status: 'fail'
         });
     }
 
-    if (!username.includes('@')) {
+    // Validate mobile format: must start with 0 and be 10 digits
+    const mobileRegex = /^0\d{9}$/;
+    if (!mobileRegex.test(mobile)) {
+        return res.status(400).json({
+            message: 'Mobile number must start with "0" and be exactly 10 digits.',
+            status: 'fail'
+        });
+    }
+
+    // If username is provided, check it's a valid email
+    if (username && !username.includes('@')) {
         return res.status(400).json({
             message: 'Username must be a valid email address containing "@"',
             status: 'fail'
         });
     }
 
-    const mobileRegex = /^\+94\d{9}$/;
-    if (!mobileRegex.test(mobile)) {
-        return res.status(400).json({
-            message: 'Mobile number must start with "+94" and be exactly 12 characters long.',
-            status: 'fail'
-        });
-    }
-
-    // Validate NIC format: new NIC (12 digits) or old NIC (9 digits + "V" or "X")
-    const newNICRegex = /^\d{12}$/;
-    const oldNICRegex = /^\d{9}[VXvx]$/;
-    if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
-        return res.status(400).json({
-            message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
-            status: 'fail'
-        });
-    }
-    try {
-        const customer = await Customer.findById(id);
-        if (!customer) {
-            return res.status(404).json({ message: 'Customer not found' });
-        }
-
-        if (username) {
-            const existingCustomer = await Customer.findOne({ username, _id: { $ne: id } });
-            if (existingCustomer) {
-                return res.status(400).json({ message: 'Username already in use' });
-            }
-        }
-
-        // Check if another customer with the same username exists, but exclude the current customer
-        const existingCustomer = await Customer.findOne({ username, _id: { $ne: id } });
-        if (existingCustomer) {
-            return res.status(400).json({ message: 'Username already in use' });
-        }
-
-        // Check if the mobile number is already in use by another user
-        const existingUserWithMobile = await Customer.findOne({ mobile, _id: { $ne: customer._id } });
-        if (existingUserWithMobile) {
-            return res.status(400).json({ message: 'Mobile number already exists' });
-        }
-
-        const existingUserWithNIC = await Customer.findOne({ nic, _id: { $ne: customer._id } });
-        if (existingUserWithNIC) {
-            return res.status(400).json({ message: 'NIC number already exists' });
-        }
-
-        // Validate NIC length
-        const newNICRegex = /^\d{12}$/;         // 12 digits only
-        const oldNICRegex = /^\d{9}[VXvx]$/;    // 9 digits + 'V' or 'X'
-
+    // If NIC is provided, validate format
+    if (nic) {
+        const newNICRegex = /^\d{12}$/;
+        const oldNICRegex = /^\d{9}[VXvx]$/;
         if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
             return res.status(400).json({
                 message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
-                status: 'fail',
+                status: 'fail'
+            });
+        }
+    }
+
+    try {
+        const customer = await Customer.findById(id);
+        if (!customer) {
+            return res.status(404).json({ message: 'Customer not found', status: 'fail' });
+        }
+
+        // Check duplicate (name + mobile), excluding self
+        const duplicate = await Customer.findOne({ name, mobile, _id: { $ne: id } });
+        if (duplicate) {
+            return res.status(400).json({
+                message: 'A customer with the same name and mobile number already exists.',
+                status: 'fail'
             });
         }
 
-        customer.username = username || customer.username;
-        customer.name = name || customer.name;
-        customer.nic = nic || customer.nic;
-        customer.mobile = mobile || customer.mobile;
-        customer.country = country || customer.country;
-        customer.city = city || customer.city;
-        customer.address = address || customer.address;
+        // If username is provided, check for duplicate (excluding self)
+        if (username) {
+            const existingUsername = await Customer.findOne({ username, _id: { $ne: id } });
+            if (existingUsername) {
+                return res.status(400).json({
+                    message: 'Username already in use.',
+                    status: 'fail'
+                });
+            }
+        }
+
+        // If NIC is provided, check for duplicate (excluding self)
+        if (nic) {
+            const existingNIC = await Customer.findOne({ nic, _id: { $ne: id } });
+            if (existingNIC) {
+                return res.status(400).json({
+                    message: 'NIC number already exists.',
+                    status: 'fail'
+                });
+            }
+        }
+
+        // Update values
+        customer.username = username || '';
+        customer.name = name;
+        customer.nic = nic || '';
+        customer.mobile = mobile;
+        customer.country = country || '';
+        customer.city = city || '';
+        customer.address = address || '';
 
         await customer.save();
-        res.json({ status: 'success', message: 'Customer updated successfully' });
+
+        res.json({
+            message: 'Customer updated successfully!',
+            status: 'success'
+        });
     } catch (error) {
         console.error('Error updating customer:', error);
         res.status(500).json({
