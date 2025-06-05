@@ -1807,7 +1807,7 @@ const printInvoice = async (req, res) => {
 
     <!-- Notes Section - Updated with text wrapping -->
     {{#isValidNote newSale.note}}
-        <div style="margin-bottom:10px; font-size: 12px;  word-wrap: break-word; overflow-wrap: break-word;">
+        <div style="margin-bottom:10px; font-size: 15px;  word-wrap: break-word; overflow-wrap: break-word;">
             <p style="margin-top: 3px; 0; margin-bottom: 3px font-size: 12px; white-space: pre-wrap; word-break: break-word;">
             Note: {{newSale.note}}
         </p>
