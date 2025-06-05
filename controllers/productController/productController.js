@@ -59,16 +59,12 @@ const createProduct = async (req, res) => {
         if (!name) missingFields.push('name');
         if (!code) missingFields.push('code');
         if (!barcode) missingFields.push('barcode');
-        if (!brand) missingFields.push('brand');
-        if (!quantityLimit) missingFields.push('quantityLimit');
         if (!category) missingFields.push('category');
         if (!purchase) missingFields.push('purchase');
         if (!saleUnit) missingFields.push('saleUnit');
         if (!unit) missingFields.push('unit');
-        if (!status) missingFields.push('status');
         if (!ptype) missingFields.push('ptype');
         if (!parsedWarehouse) missingFields.push('warehouse');
-        if (!supplier) missingFields.push('supplier');
 
         if (missingFields.length > 0) {
             return res.status(400).json({
@@ -112,7 +108,7 @@ const createProduct = async (req, res) => {
             saleUnit,
             purchase,
             ptype,
-            status,
+            status: status || 'Received',
             quantityLimit,
             supplier,
             warehouse: warehouseData,
@@ -240,16 +236,12 @@ const updateProduct = async (req, res) => {
         if (!updatedProduct.name) missingFields.push('name');
         if (!updatedProduct.code) missingFields.push('code');
         if (!updatedProduct.barcode) missingFields.push('barcode');
-        if (!updatedProduct.brand) missingFields.push('brand');
-        if (!updatedProduct.quantityLimit) missingFields.push('quantityLimit');
         if (!updatedProduct.category) missingFields.push('category');
         if (!updatedProduct.purchase) missingFields.push('purchase');
         if (!updatedProduct.saleUnit) missingFields.push('saleUnit');
         if (!updatedProduct.unit) missingFields.push('unit');
-        if (!updatedProduct.status) missingFields.push('status');
         if (!updatedProduct.ptype) missingFields.push('ptype');
         if (!parsedWarehouse) missingFields.push('warehouse');
-        if (!updatedProduct.supplier) missingFields.push('supplier');
 
         // If there are missing fields, return an error response with the missing fields
         if (missingFields.length > 0) {
@@ -317,6 +309,15 @@ const updateProduct = async (req, res) => {
             updatedProduct.image = existingProduct.image;
         }
 
+        // Sanitize quantityLimit
+        const quantityLimit = 
+            updatedProduct.quantityLimit === null || 
+            updatedProduct.quantityLimit === '' || 
+            updatedProduct.quantityLimit === 'null'
+                ? undefined
+                : Number(updatedProduct.quantityLimit);
+
+
         // Proceed to update the product in the database
         const result = await Product.findByIdAndUpdate(
             productId,
@@ -332,8 +333,8 @@ const updateProduct = async (req, res) => {
                     saleUnit: updatedProduct.saleUnit,
                     purchase: updatedProduct.purchase,
                     ptype: updatedProduct.ptype,
-                    status: updatedProduct.status,
-                    quantityLimit: updatedProduct.quantityLimit,
+                    status: updatedProduct.status || 'Received',
+                    quantityLimit: quantityLimit,
                     supplier: updatedProduct.supplier,
                     warehouse: warehouseData,
                     variation: updatedProduct.variation,

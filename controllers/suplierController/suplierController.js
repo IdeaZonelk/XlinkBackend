@@ -24,7 +24,7 @@ const createSuplier = async (req, res) => {
     const { username, name, nic, companyName, mobile, country, city, address } = req.body;
 
     // Validate input fields
-    if (!username || !name || !nic || !companyName || !mobile || !country || !city || !address) {
+    if ( !name || !companyName || !mobile ) {
         return res.status(400).json({
             message: 'All fields are required. Please provide username, name, mobile, country, city, and address.',
             status: 'fail'
@@ -33,7 +33,13 @@ const createSuplier = async (req, res) => {
 
     try {
         // Check if supplier already exists by username
-        const existingSuplier = await Suplier.findOne({ username });
+       const existingSuplier = await Suplier.findOne({
+            $and: [
+                { name: name.trim() },
+                { mobile: mobile.trim() }
+            ]
+        });
+
         if (existingSuplier) {
             return res.status(400).json({ message: 'Supplier already exists', status: 'fail' });
         }
@@ -44,20 +50,22 @@ const createSuplier = async (req, res) => {
             return res.status(400).json({ message: 'Mobile Number already exists', status: 'fail' });
         }
 
-        // Check if mobile number already exists
-        const existingNICChecking = await Suplier.findOne({ nic });
-        if (existingNICChecking) {
-            return res.status(400).json({ message: 'NIC Number already exists', status: 'fail' });
-        }
-        // Validate NIC length
-        const newNICRegex = /^\d{12}$/;
-        const oldNICRegex = /^\d{9}[VXvx]$/;
+        // Check if NIC exists and validate format, only if NIC is provided
+        if (nic) {
+            const existingNICChecking = await Suplier.findOne({ nic });
+            if (existingNICChecking) {
+                return res.status(400).json({ message: 'NIC Number already exists', status: 'fail' });
+            }
 
-        if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
-            return res.status(400).json({
-                message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
-                status: 'fail'
-            });
+            const newNICRegex = /^\d{12}$/;
+            const oldNICRegex = /^\d{9}[VXvx]$/;
+
+            if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
+                return res.status(400).json({
+                    message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
+                    status: 'fail'
+                });
+            }
         }
 
         // Create new supplier
@@ -203,36 +211,38 @@ const UpdateSuplier = async (req, res) => {
     if (!id) {
         return res.status(400).json({ message: 'ID is required' });
     }
-    if (!username || !name || !companyName || !nic || !mobile || !country || !city || !address) {
+    if (!name || !companyName ||  !mobile) {
         return res.status(400).json({
             message: 'All fields are required. Please provide username, name, dob, mobile, country, city, and address.'
         });
     }
     // Validate username (must be a valid email)
-    if (!username.includes('@')) {
+    if (username && !username.includes('@')) {
         return res.status(400).json({
             message: 'Username must be a valid email address containing "@"',
             status: 'fail'
         });
     }
 
-    // Validate mobile number: must start with "+94" and be exactly 12 characters long
-    const mobileRegex = /^\+94\d{9}$/;
+    /// Validate mobile number format (starts with 0, exactly 10 digits)
+    const mobileRegex = /^0\d{9}$/;
     if (!mobileRegex.test(mobile)) {
         return res.status(400).json({
-            message: 'Mobile number must start with "+94" and be exactly 12 characters long.',
+            message: 'Mobile number must start with "0" and be exactly 10 digits.',
             status: 'fail'
         });
     }
 
-    // Validate NIC format: new NIC (12 digits) or old NIC (9 digits + "V" or "X")
-    const newNICRegex = /^\d{12}$/;
-    const oldNICRegex = /^\d{9}[VXvx]$/;
-    if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
-        return res.status(400).json({
-            message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
-            status: 'fail'
-        });
+    // Validate NIC format only if provided
+    if (nic) {
+        const newNICRegex = /^\d{12}$/;
+        const oldNICRegex = /^\d{9}[VXvx]$/;
+        if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
+            return res.status(400).json({
+                message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X".',
+                status: 'fail'
+            });
+        }
     }
 
     try {
@@ -240,40 +250,44 @@ const UpdateSuplier = async (req, res) => {
         if (!suplier) {
             return res.status(404).json({ message: 'Suplier not found' });
         }
-        // Check if another suplier with the same username exists, but exclude the current suplier
-        const existingSuplier = await Suplier.findOne({ username, _id: { $ne: id } });
-        if (existingSuplier) {
-            return res.status(400).json({ message: 'Username already in use' });
-        }
-        // Check if the mobile number is already in use by another user
-        const existingUserWithMobile = await Suplier.findOne({ mobile, _id: { $ne: suplier._id } });
-        if (existingUserWithMobile) {
-            return res.status(400).json({ message: 'Mobile number already exists' });
-        }
-        // Check if the mobile number is already in use by another user
-        const existingUserWithNIC = await Suplier.findOne({ nic, _id: { $ne: suplier._id } });
-        if (existingUserWithNIC) {
-            return res.status(400).json({ message: 'NIC number already exists' });
-        }
-        // Validate NIC length
-        const newNICRegex = /^\d{12}$/;
-        const oldNICRegex = /^\d{9}[VXvx]$/;
+        // Check if another supplier has the same name + mobile (excluding current one)
+        const existingWithNameMobile = await Suplier.findOne({
+            _id: { $ne: id },
+            name: name.trim(),
+            mobile: mobile.trim()
+        });
 
-        if (!newNICRegex.test(nic) && !oldNICRegex.test(nic)) {
+        if (existingWithNameMobile) {
             return res.status(400).json({
-                message: 'NIC must be either 12 digits (new format) or 9 digits followed by "V" or "X" (old format).',
+                message: 'A supplier with this name and mobile number already exists.',
                 status: 'fail'
             });
         }
+
+        // Optional: Check if another supplier has same username
+        if (username) {
+            const existingWithUsername = await Suplier.findOne({ username, _id: { $ne: id } });
+            if (existingWithUsername) {
+                return res.status(400).json({ message: 'Username already in use', status: 'fail' });
+            }
+        }
+
+        // Optional: Check if NIC is duplicated (if provided)
+        if (nic) {
+            const existingWithNIC = await Suplier.findOne({ nic, _id: { $ne: id } });
+            if (existingWithNIC) {
+                return res.status(400).json({ message: 'NIC number already exists', status: 'fail' });
+            }
+        }
+        
+        // Validate NIC length
 
         suplier.username = username || suplier.username;
         suplier.name = name || suplier.name;
         suplier.companyName = companyName || suplier.companyName
         suplier.nic = nic || suplier.nic;
         suplier.mobile = mobile || suplier.mobile;
-        suplier.country = country || suplier.country;
-        suplier.city = city || suplier.city;
-        suplier.address = address || suplier.address;
+        suplier.address = address || suplier.address ;
 
         await suplier.save();
         res.json({ status: 'success', message: 'Suplier updated successfully' });
