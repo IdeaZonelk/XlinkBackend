@@ -33,6 +33,7 @@ const saleSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     discountType:{ type: String},
     discount: { type: String},
+    discountValue: { type: String, default: '0' },
     grandTotal: { type: Number, required: true },
     pureProfit: {type: Number, required: true, default: 0 },
     orderStatus: { type: String, required: true },

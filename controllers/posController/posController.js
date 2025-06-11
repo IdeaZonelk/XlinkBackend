@@ -330,6 +330,9 @@ const viewAllHeldProducts = async (req, res) => {
                     warehouse: product.warehouse,
                     variationValues,
                     subTotal: price * (product.qty || 0),
+                    wholesaleEnabled: product.wholesaleEnabled || false,
+                    wholesaleMinQty: product.wholesaleMinQty || 0,
+                    wholesalePrice: product.wholesalePrice || 0,
                 };
             }),
         }));
