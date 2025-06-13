@@ -23,13 +23,17 @@ const io = require('../../server');
 const Handlebars = require('handlebars');
 function formatDate(dateString) {
     const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} : ${hours}:${minutes}`;
+    return date.toLocaleString('en-GB', {
+        timeZone: 'UTC',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).replace(',', ' :');
 }
+
 
 Handlebars.registerHelper('formatCurrency', function (number) {
     if (isNaN(number)) return '0.00';
