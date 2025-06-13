@@ -210,10 +210,12 @@ const createSale = async (req, res) => {
                 customer: newSale.customer || '',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
-                    price: product.price || 0,
+                    price: product.applicablePrice || 0,
+                    appliedWholesale: product.appliedWholesale || false,
                     quantity: product.quantity || 0,
                     subtotal: product.subtotal || 0,
                 })),
+                baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,
                 discount: newSale.discountValue || 0,
                 cashBalance: newSale.cashBalance || 0,
@@ -489,7 +491,14 @@ const createSale = async (req, res) => {
                     {{#each newSale.productsData}}
                     <div class="product-row">
                         <div class="col-product">
-                            <div class="product-name">{{this.name}}</div>
+                            <div class="product-name">
+                                {{this.name}}
+                                {{#if this.appliedWholesale}}
+                                    <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
+                                        W
+                                    </span>
+                                {{/if}}
+                            </div>
                         </div>
                         <div class="col-quantity">{{this.quantity}} pcs</div>
                         <div class="col-price">{{formatCurrency this.price}}</div>
@@ -517,7 +526,7 @@ const createSale = async (req, res) => {
                         <!-- Calculate subtotal as sum of all products -->
                         <div class="summary-row">
                             <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
+                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
                         </div>
                         <div class="summary-row">
                             <span><b>Discount</b></span>
@@ -525,7 +534,7 @@ const createSale = async (req, res) => {
                         </div>
                         <div class="summary-row total">
                             <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency (subtract (sum newSale.productsData) newSale.discount)}}</span>
+                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
                         </div>
                     </div>
                 </div>
@@ -906,6 +915,9 @@ const findSaleById = async (req, res) => {
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
+                    wholesaleEnabled: productData.wholesaleEnabled,
+                    wholesaleMinQty: productData.wholesaleMinQty,
+                    wholesalePrice: productData.wholesalePrice,
                     _id: productData._id
                 };
             }
