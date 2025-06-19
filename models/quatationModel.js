@@ -22,6 +22,9 @@ const productSchema = new mongoose.Schema({
     discount: { type: Number},
     subtotal: { type: Number, required: true },
     warehouse: { type: String, required: true },
+    wholesaleEnabled: { type: Boolean, default: false },
+    wholesaleMinQty: { type: Number, default: 0 },
+    wholesalePrice: { type: Number, default: 0 },
 });
 
 const quatationSchema = new mongoose.Schema({

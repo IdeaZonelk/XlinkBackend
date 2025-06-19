@@ -163,7 +163,10 @@ const findQuatationById = async (req, res) => {
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
-                    _id: productData._id
+                    _id: productData._id,
+                    wholesaleEnabled: productData.wholesaleEnabled,
+                    wholesaleMinQty: productData.wholesaleMinQty,
+                    wholesalePrice: productData.wholesalePrice,
                 };
             }
 
