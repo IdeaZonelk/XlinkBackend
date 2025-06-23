@@ -24,6 +24,8 @@ const productSchema = new Schema({
     warehouse: { type: String, required: true },
     discount: { type: String, default:0},
     returnStatus:{type:Boolean, required:true, default: false},
+    applicablePrice : { type: Number, required: true },
+    appliedWholesale : { type: Boolean, default: false },
 });
 
 const saleReturnScheema = new Schema({

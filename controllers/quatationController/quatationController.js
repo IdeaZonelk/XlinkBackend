@@ -156,6 +156,7 @@ const findQuatationById = async (req, res) => {
                     variationValue: productData.variationValue,
                     name: productData.name,
                     price: productData.price,
+                    productCost: productData.productCost,
                     ptype: productData.ptype,
                     discount: productData.discount,
                     quantity: productData.quantity,
