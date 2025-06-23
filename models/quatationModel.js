@@ -33,6 +33,7 @@ const quatationSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     discountType:{ type: String},
     discount: { type: String},
+    discountValue: { type: String, default: '0.00' },
     grandTotal: { type: Number, required: true },
     orderStatus: { type: String, required: true },
     paymentStatus: { type: String, required: true },
