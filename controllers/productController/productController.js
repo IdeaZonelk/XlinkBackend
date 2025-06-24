@@ -651,4 +651,92 @@ const findProductForUpdate = async (req, res) => {
     }
 };
 
-module.exports = { findAllProducts, updateProduct, searchProductByName, deleteProduct, createProduct, findProductById, findProductForUpdate, searchProducts }
+// Update only specific fields (Images, Brand, Product Cost, Product Price)
+const updateProductFields = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { brand, productCost, productPrice } = req.body;
+
+    // Convert to numbers if possible
+    productCost = productCost !== undefined ? Number(productCost) : undefined;
+    productPrice =
+      productPrice !== undefined ? Number(productPrice) : undefined;
+
+    // 1. Fetch the product
+    const product = await Product.findById(id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    // 2. Update brand (top-level)
+    if (brand) product.brand = brand;
+
+    // 3. Update cost/price in all warehouses and variations
+    if (product.warehouse && typeof product.warehouse === "object") {
+      // Deep clone to avoid reference issues
+      let warehouses = JSON.parse(
+        JSON.stringify(
+          product.warehouse instanceof Map
+            ? Object.fromEntries(product.warehouse)
+            : product.warehouse
+        )
+      );
+
+      for (const warehouseKey in warehouses) {
+        const warehouse = warehouses[warehouseKey];
+        if (warehouse && typeof warehouse === "object") {
+          if (warehouse.variationValues) {
+            for (const variationKey in warehouse.variationValues) {
+              if (productCost !== undefined)
+                warehouse.variationValues[variationKey].productCost =
+                  productCost;
+              if (productPrice !== undefined)
+                warehouse.variationValues[variationKey].productPrice =
+                  productPrice;
+            }
+          } else {
+            if (productCost !== undefined) warehouse.productCost = productCost;
+            if (productPrice !== undefined)
+              warehouse.productPrice = productPrice;
+          }
+        }
+      }
+      product.warehouse = warehouses;
+      product.markModified("warehouse"); // Force Mongoose to detect changes
+    }
+
+    // 4. Handle image if provided
+    if (req.file) {
+      product.image = path.join("uploads", req.file.filename);
+    }
+
+    await product.save();
+    res.json({ message: "Product updated successfully", product });
+  } catch (err) {
+    res.status(500).json({ message: "Update failed", error: err.message });
+  }
+};
+
+const findProductByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const product = await Product.findOne({ code: code });
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    res.json({ product });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+module.exports = {
+  findAllProducts,
+  updateProduct,
+  updateProductFields, // Update specific fields like image, brand, product cost, and product price
+  findProductByCode,
+  searchProductByName,
+  deleteProduct,
+  createProduct,
+  findProductById,
+  findProductForUpdate,
+  searchProducts,
+};
