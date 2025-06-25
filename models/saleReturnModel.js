@@ -36,6 +36,11 @@ const saleReturnScheema = new Schema({
     grandTotal: { type: Number, required: true },
     paidAmount: { type: Number, required: true },
     returnAmount: { type: Number, required: true },
+    discountValue: { type: Number, required: true },
+    shipping : { type: Number, required: true },
+    tax : { type: Number, required: true },
+    adjustedTax : { type: Number, required: true },
+    adjustedDiscount : { type: Number, required: true },
     note: {type: String, required: true},
     productsData: [productSchema]
 },
