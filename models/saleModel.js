@@ -32,6 +32,13 @@ const productSchema = new mongoose.Schema({
     wholesalePrice: { type: Number, default: 0 },
 });
 
+const creditDetailsSchema = new mongoose.Schema({
+        interestRate: { type: String, required: true , default: 0 },
+        months: { type: String, required: true },
+        interestAmount: { type: String, required: true },
+        monthlyInstallment : { type: String, required: true },
+});
+
 const saleSchema = new mongoose.Schema({
     refferenceId : { type: String, required: true, unique: true }, 
     customer: { type: String},
@@ -44,6 +51,8 @@ const saleSchema = new mongoose.Schema({
     pureProfit: {type: Number, required: true, default: 0 },
     orderStatus: { type: String, required: true },
     paymentStatus: { type: String, required: true },
+    useCreditPayment: { type: Boolean, default: false },
+    creditDetails:  creditDetailsSchema,
     paymentType: [
         {
             type: { type: String, required: true },
