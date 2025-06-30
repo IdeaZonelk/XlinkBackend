@@ -24,6 +24,9 @@ const heldProductSchema = new mongoose.Schema({
     subTotal: { type: String, required: true },
     warehouse: {type: String, required: true },
     discount: { type: Number, required: true },
+    wholesaleEnabled: { type: Boolean, default: false },
+    wholesaleMinQty: { type: Number, default: 0 },
+    wholesalePrice: { type: String, default: '0' },
 });
 
 // Define the schema for the collection of held products

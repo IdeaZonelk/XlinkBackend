@@ -23,13 +23,17 @@ const io = require('../../server');
 const Handlebars = require('handlebars');
 function formatDate(dateString) {
     const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} : ${hours}:${minutes}`;
+    return date.toLocaleString('en-GB', {
+        timeZone: 'UTC',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).replace(',', ' :');
 }
+
 
 Handlebars.registerHelper("formatPaymentType", function (type) {
   const typeMap = {
@@ -39,6 +43,7 @@ Handlebars.registerHelper("formatPaymentType", function (type) {
   };
   return typeMap[type] || type;
 });
+
 
 Handlebars.registerHelper('formatCurrency', function (number) {
     if (isNaN(number)) return '0.00';
@@ -219,12 +224,14 @@ const createSale = async (req, res) => {
                 customer: newSale.customer || '',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
-                    price: product.price || 0,
+                    price: product.applicablePrice || 0,
+                    appliedWholesale: product.appliedWholesale || false,
                     quantity: product.quantity || 0,
                     subtotal: product.subtotal || 0,
                 })),
+                baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,
-                discount: newSale.discount || 0,
+                discount: newSale.discountValue || 0,
                 cashBalance: newSale.cashBalance || 0,
                 paymentType: saleData.paymentType.map(payment => ({
                     type: payment.type || 'Unknown',
@@ -498,7 +505,14 @@ const createSale = async (req, res) => {
                     {{#each newSale.productsData}}
                     <div class="product-row">
                         <div class="col-product">
-                            <div class="product-name">{{this.name}}</div>
+                            <div class="product-name">
+                                {{this.name}}
+                                {{#if this.appliedWholesale}}
+                                    <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
+                                        W
+                                    </span>
+                                {{/if}}
+                            </div>
                         </div>
                         <div class="col-quantity">{{this.quantity}} pcs</div>
                         <div class="col-price">{{formatCurrency this.price}}</div>
@@ -526,7 +540,7 @@ const createSale = async (req, res) => {
                         <!-- Calculate subtotal as sum of all products -->
                         <div class="summary-row">
                             <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
+                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
                         </div>
                         <div class="summary-row">
                             <span><b>Discount</b></span>
@@ -534,7 +548,7 @@ const createSale = async (req, res) => {
                         </div>
                         <div class="summary-row total">
                             <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency (subtract (sum newSale.productsData) newSale.discount)}}</span>
+                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
                         </div>
                     </div>
                 </div>
@@ -915,6 +929,9 @@ const findSaleById = async (req, res) => {
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
+                    wholesaleEnabled: productData.wholesaleEnabled,
+                    wholesaleMinQty: productData.wholesaleMinQty,
+                    wholesalePrice: productData.wholesalePrice,
                     _id: productData._id
                 };
             }
@@ -1710,136 +1727,341 @@ const printInvoice = async (req, res) => {
                     name: product.name,
                     warranty: product.warranty || '',
                     price: product.price,
+                    appliedWholesale: product.appliedWholesale,
                     quantity: product.quantity,
                     subtotal: product.subtotal,
                 })),
+                baseTotal: sale.baseTotal || 0,
                 grandTotal: sale.grandTotal,
-                discount: sale.discount || 0,
+                discount: sale.discountValue || 0,
                 cashBalance: sale.cashBalance || 0,
                 paymentType: sale.paymentType,
                 note: sale.note || '',
             },
         };
 
-        const invoiceTemplate = `
-        <div style="font-family: Arial, sans-serif; max-width: 80mm; margin: 0; padding: 10px; border: 1px solid #ccc; position: absolute; left: 0; top: 0;">
-        <!-- Your existing receipt content remains the same -->
+    const invoiceTemplate = `
+        <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
             <style>
-            @media print {
+                /* Base Styles */
                 body {
-                    margin: 0 !important;
-                    padding: 0 !important;
+                    margin: 0;
+                    padding: 0;
+                    font-family: Arial, sans-serif;
+                    color: #333;
                 }
-                @page {
-                    margin: 0 !important;
-                    padding: 0 !important;
+                    {
+                        width: "148mm", // A5 landscape width
+                        minHeight: "210mm", // A5 landscape height
+                        margin: "0 auto",
+                        boxShadow: "none",
+                        pageBreakInside: "avoid"
+                    }
+                
+                <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
+            <style>
+                /* Base Styles */
+                body {
+                    margin: 0;
+                    padding: 0;
+                    font-family: Arial, sans-serif;
+                    color: #333;
                 }
-            }
+                
+                /* Print Styles */
+                @media print {
+                    body, .print-container {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    @page {
+                        size: A5 portrait;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    .product-row {
+                        page-break-inside: avoid;
+                    }
+                    .page-break {
+                        page-break-before: always;
+                    }
+                }
+                
+                /* Receipt Container */
+                .receipt-container {
+                    width: 148mm;
+                    min-height: 210mm;
+                    margin: 0;
+                    padding: 10mm;
+                    background-color: white;
+                    border: 1px solid #d1d5db;
+                    box-shadow: none;
+                    page-break-inside: avoid;
+                }
+                
+                .print-container {
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                }
+                
+                /* Company Header */
+                .company-header {
+                    text-align: center;
+                    color: #000000;
+                    margin-bottom: 20px;
+                }
+                
+                .logo-container {
+                    width: 100%;
+                    text-align: center;
+                    margin-bottom: 8px;
+                }
+                
+                .logo-placeholder {
+                    height: 60px;
+                    background: linear-gradient(45deg, #8B4513, #D2691E, #F4A460, #DEB887);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    color: #654321;
+                    position: relative;
+                    margin-bottom: 10px;
+                }
+                
+                .company-name {
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #000000;
+                    margin-bottom: 2px;
+                }
+                
+                .company-tagline {
+                    font-size: 12px;
+                    color: #666;
+                    margin-bottom: 15px;
+                }
+                
+                /* Invoice Meta Section */
+                .invoice-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                    margin-top: 30px;
+                    font-size: 15px;
+                    color: #000000;
+                }
+                
+                .meta-left {
+                    flex: 1;
+                    text-align: left;
+                }
+                
+                .meta-right {
+                    text-align: right;
+                }
+                
+                .meta-item {
+                    margin-bottom: 3px;
+                    color: #000000;
+                }
+                
+                /* Divider Line */
+                .divider {
+                    width: 100%;
+                    border-top: 1px solid #000;
+                    margin: 8px 0;
+                    margin-top: 30px
+                }
+                
+                /* Products Section */
+                .products-section {
+                    margin-top: 40px;
+                }
+                
+                .products-header {
+                    display: flex;
+                    font-weight: bold;
+                    font-size: 15px;
+                    margin-bottom: 8px;
+                    color: #000000;
+                }
+                
+                .col-product {
+                    flex: 3;
+                    text-align: left;
+                }
+                
+                .col-quantity {
+                    flex: 1;
+                    text-align: center;
+                }
+                
+                .col-price {
+                    flex: 1.2;
+                    text-align: right;
+                }
+                
+                .col-subtotal {
+                    flex: 1.2;
+                    text-align: right;
+                }
+                
+                .product-row {
+                    display: flex;
+                    font-size: 14px;
+                    margin-bottom: 5px;
+                    color: #000000;
+                    align-items: flex-start;
+                }
+                
+                .product-name {
+                    word-wrap: break-word;
+                    line-height: 1.2;
+                }
+                
+                /* Payment Summary */
+                .payment-summary {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 18px;
+                    font-size: 15px;
+                    color: #000000;
+                }
+                
+                .payment-left {
+                    flex: 1;
+                }
+                
+                .payment-right {
+                    flex: 1;
+                    text-align: right;
+                }
+                
+                .payment-item {
+                    margin-bottom: 3px;
+                }
+                
+                .summary-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 3px;
+                }
+                
+                .summary-row.total {
+                    font-size: 16px;
+                    margin-top: 5px;
+                }
+
+                .system-by {
+                    font-size: 14px;
+                    text-align: center;
+                    margin-top: 4px;
+                    color: #000000;
+                }
             </style>
-        <!-- Script to generate barcode (will run when HTML is rendered) -->
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    JsBarcode('#barcode-{{newSale.invoiceNumber}}', '{{newSale.invoiceNumber}}', {
-                    format: 'CODE128',
-                    width: 1.2,
-                    height: 30,
-                    fontSize: 14,
-                    margin: 5,
-                    displayValue: true
-                });
-            });
-            </script>
-        
-        <div style="text-align: center; margin-bottom: 10px;">
-            {{#if settings.logo}}
-            <img src="{{settings.logo}}" alt="Logo" style="max-height: 50px; margin: 2px auto;">
-            {{/if}}
-            <h2 style="margin: 5px 0;">{{settings.companyName}}</h2>
-            <p style="margin: 2px 0;">{{settings.companyAddress}}</p>
-            <p style="margin: 2px 0;">{{settings.companyMobile}}</p>
-        </div>
 
-        <!-- Transaction Info -->
-            <div style="margin-bottom: 10px;">
-                <p style="margin: 3px 0; font-size: 13px;">Salesman: {{newSale.cashierUsername}}</p>
-                <p style="margin: 3px 0; font-size: 13px;">Receipt No: {{newSale.invoiceNumber}}</p>
-                <p style="margin: 3px 0; font-size: 13px;">Date: {{newSale.date}}</p>
-                <p style="margin: 3px 0; font-size: 13px;">Customer: {{newSale.customer}}</p>
+            <!-- Company Header Section -->
+            <div class="receipt-container">
+                <!-- Company Header -->
+                <div class="company-header">
+                    <!-- Logo Container -->
+                    <div style="overflow: hidden; display: flex; justify-content: center; align-items: center; ">
+                    <img src="{{settings.logo}}" alt="Logo" style="max-height: 100px; max-width: 100%; margin: 2px auto;">
+                    </div>
+                </div>
+
+                <!-- Invoice Meta Section -->
+                <div class="invoice-meta">
+                    <!-- Left: Invoice Meta Data -->
+                    <div class="meta-left">
+                        <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
+                        <div class="meta-item"><b>Customer</b></div>
+                        <div class="meta-item">{{newSale.customer}}</div>
+                        <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
+                    </div>
+
+                    <!-- Right: Date -->
+                    <div class="meta-right">
+                        <div class="meta-item"><b>Date</b> {{newSale.date}}</div>
+                    </div>
+                </div>
+
+                <!-- Products Section -->
+                <div class="products-section">
+                    <div class="products-header">
+                        <div class="col-product">Product</div>
+                        <div class="col-quantity">Quantity</div>
+                        <div class="col-price">Unit Price</div>
+                        <div class="col-subtotal">Subtotal</div>
+                    </div>
+
+                    {{#each newSale.productsData}}
+                    <div class="product-row">
+                        <div class="col-product">
+                            <div class="product-name">
+                                {{this.name}}
+                                {{#if this.appliedWholesale}}
+                                    <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
+                                        W
+                                    </span>
+                                {{/if}}
+                            </div>
+                        </div>
+                        <div class="col-quantity">{{this.quantity}} pcs</div>
+                        <div class="col-price">{{formatCurrency this.price}}</div>
+                        <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
+                    </div>
+                    {{/each}}
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Payment Summary -->
+                <div class="payment-summary">
+                    <div class="payment-left">
+                        {{#each newSale.paymentType}}
+                        <div class="payment-item">
+                            <b>{{this.type}}</b> {{formatCurrency this.amount}}
+                        </div>
+                        {{/each}}
+                        <div class="payment-item">
+                            <b>Total Paid</b> {{formatCurrency newSale.grandTotal}}
+                        </div>
+                    </div>
+
+                    <div class="payment-right">
+                        <!-- Calculate subtotal as sum of all products -->
+                        <div class="summary-row">
+                            <span><b>Subtotal:</b></span>
+                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span><b>Discount</b></span>
+                            <span>(-) Rs {{formatCurrency newSale.discount}}</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span><b>Total:</b></span>
+                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {{#isValidNote newSale.note}}
+                    <div style="margin-bottom:10px; font-size: 15px;  word-wrap: break-word; overflow-wrap: break-word;">
+                        <p style="margin-top: 3px; 0; margin-bottom: 3px font-size: 12px; white-space: pre-wrap; word-break: break-word;">
+                        Note: {{newSale.note}}
+                    </p>
+                    </div>
+                {{/isValidNote}}
+
+                </div>
             </div>
-
-        <!-- Products Table -->
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
-            <thead>
-                <tr>
-                    <th style="text-align: left; font-size: 13px;">Product</th>
-                    <th style="text-align: left; font-size: 13px;">Price</th>
-                    <th style="text-align: center; font-size: 13px;">Qty</th>
-                    <th style="text-align: right; font-size: 13px;">Amount</th>
-                </tr>
-            </thead>
-        <tbody>
-            {{#each newSale.productsData}}
-            <tr>
-                <td style="padding: 2px 0; font-size: 13px;">{{this.name}}</td>
-                <td style="padding: 2px 0; font-size: 13px;">{{formatCurrency this.price}}</td>
-                <td style="text-align: center; padding: 2px 0; font-size: 13px;">{{this.quantity}}</td>
-                <td style="text-align: right; padding: 2px 0; font-size: 13px;">{{formatCurrency this.subtotal}}</td>
-            </tr>
-            {{/each}}
-        </tbody>
-       <tfoot>
-    <tr><td colspan="4" style="padding-top: 8px;"></td></tr>
-        <tr>
-            <td colspan="3" style="text-align: right; padding: 2px 0; font-size: 14px;">Total:</td>
-            <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
-        </tr>
-    <tr>
-        <td colspan="3" style="text-align: right; padding: 2px 0; font-size: 14px;">Discount:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.discount}}</td>
-    </tr>
-    
-    <!-- Payment Details Rows -->
-    {{#each newSale.paymentType}}
-    <tr>
-        <td colspan="3" style="text-align: right; padding: 2px 0; font-size: 14px;">{{this.type}}:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency this.amount}}</td>
-    </tr>
-    {{/each}}
-        
-            <tr>
-                <td colspan="3" style="text-align: right; padding: 2px 0; font-size: 14px;">Balance:</td>
-                <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.cashBalance}}</td>
-            </tr>
-        </tfoot>
-    </table>
-
-    <!-- Notes Section - Updated with text wrapping -->
-    {{#isValidNote newSale.note}}
-        <div style="margin-bottom:10px; font-size: 15px;  word-wrap: break-word; overflow-wrap: break-word;">
-            <p style="margin-top: 3px; 0; margin-bottom: 3px font-size: 12px; white-space: pre-wrap; word-break: break-word;">
-            Note: {{newSale.note}}
-        </p>
-        </div>
-        {{/isValidNote}}
-
-        <!-- Footer -->
-        <div style="text-align: center; margin-top: 15px; font-size: 0.8em;">
-        <p style="margin: 4px 0;">
-            *** EXCHANGE OF PRODUCTS IN RE-SALABLE CONDITION<br>
-            WITH RECEIPT WITHIN 07 DAYS ***<br>
-            THANK YOU FOR SHOPPING WITH US!<br><br>
-        </p>
-
-        <!-- Barcode Section -->
-        <div style="text-align: center; margin: 10px 0;">
-            <canvas id="barcode-{{newSale.invoiceNumber}}"></canvas>
-        </div>
-         <p style="margin: 4px 0;">
-            System by IDEAZONE
-        </p>
-        </div>
-    </div>`;
+        </div>`;
 
         Handlebars.registerHelper('isValidNote', function (note, options) {
             return note && note !== 'null' ? options.fn(this) : options.inverse(this);

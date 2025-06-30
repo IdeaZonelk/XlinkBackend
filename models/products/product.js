@@ -21,6 +21,9 @@ const variationSchema = new mongoose.Schema({
   stockAlert: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
   taxType: { type: String , default: 'Exclusive' },
+  wholesaleEnabled: { type: Boolean, default: false },
+  wholesaleMinQty: { type: Number, default: 0 },
+  wholesalePrice: { type: Number, default: 0 },
 }, { _id: false });
 
 // Warehouse schema
@@ -36,6 +39,9 @@ const warehouseSchema = new mongoose.Schema({
   taxType: { type: String},
   variationType: { type: String},
   variationValues: { type: Map, of: variationSchema },
+  wholesaleEnabled: { type: Boolean, default: false },
+  wholesaleMinQty: { type: Number, default: 0 },
+  wholesalePrice: { type: Number, default: 0 },
 }, { _id: false });
 
 // Product schema

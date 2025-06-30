@@ -15,13 +15,17 @@ const productSchema = new mongoose.Schema({
     currentID: { type: String, required: true },
     name: { type: String, required: true },
     price: { type: String, required: true },
-    ptype: { type: String, required: true }, 
+    ptype: { type: String, required: true },
+    productCost : { type: String, required: true },
     variationValue: { type: String},
     quantity: { type: Number, required: true },
     taxRate: { type: Number},
     discount: { type: Number},
     subtotal: { type: Number, required: true },
     warehouse: { type: String, required: true },
+    wholesaleEnabled: { type: Boolean, default: false },
+    wholesaleMinQty: { type: Number, default: 0 },
+    wholesalePrice: { type: Number, default: 0 },
 });
 
 const quatationSchema = new mongoose.Schema({
@@ -29,6 +33,7 @@ const quatationSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     discountType:{ type: String},
     discount: { type: String},
+    discountValue: { type: String, default: '0.00' },
     grandTotal: { type: Number, required: true },
     orderStatus: { type: String, required: true },
     paymentStatus: { type: String, required: true },

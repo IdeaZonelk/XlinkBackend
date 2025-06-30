@@ -83,6 +83,9 @@ const createProduct = async (req, res) => {
                     stockAlert: parsedWarehouse[warehouseName].stockAlert || 0,
                     taxType: parsedWarehouse[warehouseName].taxType || 0,
                     discount: parsedWarehouse[warehouseName].discount || 0,
+                    wholesaleEnabled: parsedWarehouse[warehouseName].wholesaleEnabled || false,
+                    wholesaleMinQty: parsedWarehouse[warehouseName].wholesaleMinQty || 1,
+                    wholesalePrice: parsedWarehouse[warehouseName].wholesalePrice || 0,
                 };
             });
         } else if (ptype === 'Variation') {
@@ -274,6 +277,9 @@ const updateProduct = async (req, res) => {
                     stockAlert: parsedWarehouse[warehouseName].stockAlert || 0,
                     taxType: parsedWarehouse[warehouseName].taxType || 0,
                     discount: parsedWarehouse[warehouseName].discount || 0,
+                    wholesaleEnabled: parsedWarehouse[warehouseName].wholesaleEnabled || false,
+                    wholesaleMinQty: parsedWarehouse[warehouseName].wholesaleMinQty || 0,
+                    wholesalePrice: parsedWarehouse[warehouseName].wholesalePrice || 0
                 };
             });
         } else if (updatedProduct.ptype === 'Variation') {
@@ -568,7 +574,6 @@ const searchProductByName = async (req, res) => {
                 image: productObj.image ? `${req.protocol}://${req.get('host')}/uploads/product/${path.basename(productObj.image)}` : null,
             };
         });
-        console.log(formattedProducts)
         return res.status(200).json({ status: "success", products: formattedProducts });
     } catch (error) {
         console.error("Search product error:", error);
