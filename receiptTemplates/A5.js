@@ -15,18 +15,6 @@ Handlebars.registerHelper('addOne', function (index) {
     return index + 1;
 });
 
-const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-};
-
 Handlebars.registerHelper('formatMobile', function (mobileNumber) {
     if (!mobileNumber) return 'N/A';
     const digits = mobileNumber.replace(/\D/g, '');
@@ -60,6 +48,18 @@ Handlebars.registerHelper('formatMobile', function (mobileNumber) {
     }
     return mobileNumber;
 });
+
+const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
 
 const template = Handlebars.compile(`
 <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
@@ -340,7 +340,11 @@ const template = Handlebars.compile(`
                     <div class="payment-left">
                         {{#each newSale.paymentType}}
                         <div class="payment-item">
-                            <b>{{this.type}}</b> {{formatCurrency this.amount}}
+                            <b> {{#if (eq this.type "bank_transfer")}}Bank Transfer
+    {{else if (eq this.type "cash")}}Cash
+    {{else if (eq this.type "card")}}Card
+    {{else}}Unknown
+    {{/if}}:</b> {{formatCurrency this.amount}}
                         </div>
                         {{/each}}
                         <div class="payment-item">
@@ -380,12 +384,12 @@ const template = Handlebars.compile(`
 module.exports = {
     generateReceiptA5: (data) => {
         // Format the date before passing to template
-        const formattedData = {
-            ...data,
-            newSale: {
-                ...data.newSale,
-                date: formatDate(data.newSale.date)
-            }
+       const formattedData = {
+          ...data,
+          newSale: {
+            ...data.newSale,
+            date: formatDate(new Date()),
+          },
         };
         return template(formattedData);
     },

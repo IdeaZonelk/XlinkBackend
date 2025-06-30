@@ -371,7 +371,11 @@ const template = Handlebars.compile(`
 
     {{#each newSale.paymentType}}
     <tr style="text-align: right; padding: 2px 0; font-size: 12px;">
-        <td colspan="4" >{{this.type}}:</td>
+        <td colspan="4" > {{#if (eq this.type "bank_transfer")}}Bank Transfer
+    {{else if (eq this.type "cash")}}Cash
+    {{else if (eq this.type "card")}}Card
+    {{else}}Unknown
+    {{/if}}:</td>
         <td >{{formatCurrency this.amount}}</td>
     </tr>
     {{/each}}
@@ -427,8 +431,8 @@ module.exports = {
             ...data,
             newSale: {
                 ...data.newSale,
-                date: formatDate(data.newSale.date)
-            }
+                date: formatDate(new Date()),
+            },
         };
         return template(formattedData);
     },

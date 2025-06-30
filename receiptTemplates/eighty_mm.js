@@ -117,7 +117,7 @@ const template = Handlebars.compile(`
                 <td></td>
                 <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency this.price}}</td>
                 <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency this.ourPrice}}</td>
-                <td style="text-align: center; padding: 2px 0; font-size: 13px; padding-left:20px">{{this.quantity}}{{#if this.isWeight}} {{this.baseUnit}}{{/if}}</td>
+                <td style="text-align: center; padding: 2px 0; font-size: 13px; padding-left:20px">{{this.quantity}} PCS</td>
                 <td style="text-align: right; padding: 2px 0; font-size: 13px;">{{formatCurrency this.subtotal}}</td>
             </tr>
             {{/each}}
@@ -125,9 +125,6 @@ const template = Handlebars.compile(`
        <tfoot>
     <tr><td colspan="4" style="padding-top: 8px;"></td></tr>
     <tr>
-  <td colspan="5" style="text-align: left; font-size: 14px;  padding-top: 6px;">
-    Total Pieces: {{ newSale.totalPcs}}
-  </td>
 </tr>
 
         <tr>
