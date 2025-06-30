@@ -17,7 +17,7 @@ const createOrUpdateReceiptSettings = async (req, res) => {
         const settingsData = req.body;
         const updatedSettings = await receiptSettingsSchema.findOneAndUpdate({}, settingsData, {
             new: true,
-            upsert: true // Create if doesn't exist
+            upsert: true
         });
 
         res.status(201).json({
@@ -27,13 +27,13 @@ const createOrUpdateReceiptSettings = async (req, res) => {
         });
     } catch (error) {
         console.error('Error saving settings:', error);
-
         res.status(500).json({
             status: 'error',
             message: 'Internal server error while saving settings.',
             error: error.message
         });
     }
+
 };
 
 
@@ -50,4 +50,4 @@ const getReceiptSettings = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-module.exports ={createOrUpdateReceiptSettings,getReceiptSettings}
+module.exports = { createOrUpdateReceiptSettings, getReceiptSettings }
