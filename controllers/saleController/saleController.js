@@ -35,6 +35,16 @@ function formatDate(dateString) {
 }
 
 
+Handlebars.registerHelper("formatPaymentType", function (type) {
+  const typeMap = {
+    cash: "Cash",
+    card: "Card",
+    bank_transfer: "Bank Transfer",
+  };
+  return typeMap[type] || type;
+});
+
+
 Handlebars.registerHelper('formatCurrency', function (number) {
     if (isNaN(number)) return '0.00';
     const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split('.');
@@ -517,9 +527,9 @@ const createSale = async (req, res) => {
                 <div class="payment-summary">
                     <div class="payment-left">
                         {{#each newSale.paymentType}}
-                        <div class="payment-item">
-                            <b>{{this.type}}</b> {{formatCurrency this.amount}}
-                        </div>
+                            <div class="payment-item">
+                                <b>{{formatPaymentType this.type}}</b> {{formatCurrency this.amount}}
+                            </div>
                         {{/each}}
                         <div class="payment-item">
                             <b>Total Paid</b> {{formatCurrency newSale.grandTotal}}
