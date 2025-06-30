@@ -156,6 +156,7 @@ const findQuatationById = async (req, res) => {
                     variationValue: productData.variationValue,
                     name: productData.name,
                     price: productData.price,
+                    productCost: productData.productCost,
                     ptype: productData.ptype,
                     discount: productData.discount,
                     quantity: productData.quantity,
@@ -163,7 +164,10 @@ const findQuatationById = async (req, res) => {
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
-                    _id: productData._id
+                    _id: productData._id,
+                    wholesaleEnabled: productData.wholesaleEnabled,
+                    wholesaleMinQty: productData.wholesaleMinQty,
+                    wholesalePrice: productData.wholesalePrice,
                 };
             }
 

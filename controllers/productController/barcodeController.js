@@ -99,6 +99,9 @@ const searchProductByName = async (req, res) => {
                 variationValues: selectedWarehouseData.variationValues || {},
                 warehouseId: warehouse || Object.keys(productObj.warehouse || {})[0] || null,
                 warehouse: warehouse || Object.keys(productObj.warehouse || {})[0] || null,
+                wholesaleEnabled: selectedWarehouseData.wholesaleEnabled || productObj.wholesaleEnabled || false,
+                wholesalePrice: selectedWarehouseData.wholesalePrice || productObj.wholesalePrice || 0,
+                wholesaleMinQty: selectedWarehouseData.wholesaleMinQty || productObj.wholesaleMinQty || 0,
             };
         });
 

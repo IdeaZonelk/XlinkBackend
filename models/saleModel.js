@@ -15,6 +15,8 @@ const productSchema = new mongoose.Schema({
     currentID: { type: String, required: true },
     name: { type: String, required: true },
     price: { type: String, required: true },
+    appliedWholesale : { type: Boolean, default: false },
+    applicablePrice : { type: String, required: true },
     ptype: { type: String, required: true },
     discount: { type: Number}, 
     specialDiscount : { type: Number},
@@ -25,6 +27,9 @@ const productSchema = new mongoose.Schema({
     subtotal: { type: Number, required: true },
     productProfit: {type: Number, required: true, default: 0},
     warehouse: { type: String, required: true },
+    wholesaleEnabled: { type: Boolean, default: false },
+    wholesaleMinQty: { type: Number, default: 0 },
+    wholesalePrice: { type: Number, default: 0 },
 });
 
 const saleSchema = new mongoose.Schema({
@@ -33,6 +38,8 @@ const saleSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     discountType:{ type: String},
     discount: { type: String},
+    discountValue: { type: String, default: '0' },
+    baseTotal: { type: Number, required: true },
     grandTotal: { type: Number, required: true },
     pureProfit: {type: Number, required: true, default: 0 },
     orderStatus: { type: String, required: true },

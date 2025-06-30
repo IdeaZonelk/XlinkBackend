@@ -479,7 +479,12 @@ const searchSaleReturns = async (req, res) => {
                 grandTotal: saleReturnObj.grandTotal,
                 warehouse: saleReturnObj.warehouse,
                 paidAmount: saleReturnObj.paidAmount,
+                discountValue: saleReturnObj.discountValue,
+                shipping: saleReturnObj.shipping,
+                tax: saleReturnObj.tax,
                 returnAmount: saleReturnObj.returnAmount,
+                adjustedTax : saleReturnObj.adjustedTax,
+                adjustedDiscount : saleReturnObj.adjustedDiscount,
                 date: saleReturnObj.date,
                 productsData: saleReturnObj.productsData, // Include product details
                 createdAt: saleReturnObj.createdAt

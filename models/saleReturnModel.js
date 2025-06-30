@@ -24,6 +24,8 @@ const productSchema = new Schema({
     warehouse: { type: String, required: true },
     discount: { type: String, default:0},
     returnStatus:{type:Boolean, required:true, default: false},
+    applicablePrice : { type: Number, required: true },
+    appliedWholesale : { type: Boolean, default: false },
 });
 
 const saleReturnScheema = new Schema({
@@ -34,6 +36,11 @@ const saleReturnScheema = new Schema({
     grandTotal: { type: Number, required: true },
     paidAmount: { type: Number, required: true },
     returnAmount: { type: Number, required: true },
+    discountValue: { type: Number, default: 0 },
+    shipping : { type: Number, default: 0 },
+    tax : { type: Number, default : 0 },
+    adjustedTax : { type: Number, default: 0 },
+    adjustedDiscount : { type: Number, default: 0 },
     note: {type: String, required: true},
     productsData: [productSchema]
 },
