@@ -33,10 +33,10 @@ const productSchema = new mongoose.Schema({
 });
 
 const creditDetailsSchema = new mongoose.Schema({
-        interestRate: { type: String, required: true , default: 0 },
-        months: { type: String, required: true },
-        interestAmount: { type: String, required: true },
-        monthlyInstallment : { type: String, required: true },
+        interestRate: { type: String, default: 0 },
+        months: { type: String, default: 0 },
+        interestAmount: { type: String, default: 0 },
+        monthlyInstallment : { type: String, default: 0 },
 });
 
 const saleSchema = new mongoose.Schema({
