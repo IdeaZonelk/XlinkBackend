@@ -1340,6 +1340,8 @@ const searchSale = async (req, res) => {
                 shipping: saleObj.shipping,
                 tax: saleObj.tax,
                 productsData: saleObj.productsData, // Include product details
+                creditDetails: saleObj.creditDetails,
+                useCreditPayment: saleObj.useCreditPayment,
                 createdAt: saleObj.createdAt
                     ? saleObj.createdAt.toISOString().slice(0, 10)
                     : null,
