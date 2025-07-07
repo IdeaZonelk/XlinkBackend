@@ -23,9 +23,9 @@ const receiptSettingsSchema = new mongoose.Schema({
     barcode: { type: Boolean, default: false },
     productCode: { type: Boolean, default: false },
     logo: { type: Boolean, default: false },
+    template: { type: String, required: true},
 });
 
 // Create a model from the schema
 const ReceiptSettings = mongoose.model('ReceiptSettings', receiptSettingsSchema);
-
 module.exports = ReceiptSettings;

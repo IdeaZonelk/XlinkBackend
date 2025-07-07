@@ -21,18 +21,33 @@ const Quatation = require('../../models/quatationModel');
 const generateReferenceId = require('../../utils/generateReferenceID');
 const io = require('../../server');
 const Handlebars = require('handlebars');
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-GB', {
-        timeZone: 'UTC',
-        day: '2-digit',
-        month: '2-digit',
+const receiptSettingsSchema = require('../../models/receiptSettingsModel');
+const { generateReceiptEighty, getBarcodeScriptEighty } = require('../../receiptTemplates/eighty_mm');
+const { generateReceiptA5, getBarcodeScriptA5 } = require('../../receiptTemplates/A5');
+const { generateReceiptA4, getBarcodeScriptA4 } = require('../../receiptTemplates/A4');
+
+const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', {
         year: 'numeric',
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-    }).replace(',', ' :');
-}
+        minute: '2-digit'
+    });
+};
+
+
+
+Handlebars.registerHelper("formatPaymentType", function (type) {
+  const typeMap = {
+    cash: "Cash",
+    card: "Card",
+    bank_transfer: "Bank Transfer",
+  };
+  return typeMap[type] || type;
+});
 
 
 Handlebars.registerHelper('formatCurrency', function (number) {
@@ -42,53 +57,28 @@ Handlebars.registerHelper('formatCurrency', function (number) {
     return `${formattedInteger}.${decimalPart}`;
 });
 
-Handlebars.registerHelper("subtract", function (value1, value2) {
-  return value1 - value2;
-});
-Handlebars.registerHelper("formatMobile", function (mobileNumber) {
-  if (!mobileNumber) return "";
-  // Remove non-digit characters
-  const cleaned = mobileNumber.replace(/\D/g, "");
-  // Format based on country code
-  if (cleaned.startsWith("94") && cleaned.length === 11) {
-    return "0" + cleaned.slice(2); // e.g., 9471XXXXXXX -> 071XXXXXXX
-  }
-  if (cleaned.startsWith("0") && cleaned.length === 10) {
-    return cleaned; // Already formatted
-  }
-  // Fallback: last 10 digits
-  return cleaned.slice(-10);
-});  
-
-Handlebars.registerHelper("sum", function (products) {
-  return products.reduce(
-    (total, product) => total + (product.subtotal || 0),
-    0
-  );
-});
-
 const createSale = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const saleData = req.body;
         if (!saleData.invoiceNumber) {
             throw new Error("Invoice number is missing");
         }
 
+        const receiptSettings = await receiptSettingsSchema.findOne();
+        if (!receiptSettings) {
+            throw new Error("Receipt settings not found");
+        }
+
         const referenceId = await generateReferenceId('SALE');
         saleData.refferenceId = referenceId;
         saleData.invoiceNumber = saleData.invoiceNumber;
 
-        // Fetch default warehouse from settings in the database
         const settings = await Settings.findOne();
         if (!settings || !settings.defaultWarehouse) {
             throw new Error("Default warehouse is not configured in settings.");
         }
         const defaultWarehouse = settings.defaultWarehouse;
 
-        // Validation checks
         if (isEmpty(saleData.warehouse) && isEmpty(saleData.warehouseId)) {
             throw new Error('Warehouse is required.');
         }
@@ -105,46 +95,49 @@ const createSale = async (req, res) => {
             throw new Error('Payment Status is required.');
         }
 
-        // Default values for optional fields
+        // Set default values
         saleData.cashierUsername = saleData.cashierUsername || 'Unknown';
         saleData.paymentType = saleData.paymentType || 'cash';
         saleData.orderStatus = saleData.orderStatus || 'ordered';
         saleData.customer = saleData.customer || 'Unknown';
         saleData.warehouse = saleData.warehouse || saleData.warehouseId;
 
-
         if (!Array.isArray(saleData.paymentType)) {
             return res.status(400).json({ message: 'Invalid paymentType format.', status: 'unsuccess' });
         }
 
-        // Process payment types and amounts
+        // Process payment types
         const paymentTypes = saleData.paymentType.map(payment => {
             if (!payment.type || !payment.amount) {
                 throw new Error(`Invalid payment type: ${JSON.stringify(payment)}`);
             }
             return { type: payment.type, amount: Number(payment.amount) };
         });
-
         saleData.paymentType = paymentTypes;
 
-        // Check if the selected warehouse is different from the default warehouse
+        // Warehouse validation
         if (saleData.warehouse !== defaultWarehouse) {
-            res.status(400).json({ message: "Sale creation unsuccessful. Please choose products from the default warehouse to create a sale.", status: 'unsuccess' });
-            return;
+            return res.status(400).json({
+                message: "Sale creation unsuccessful. Please choose products from the default warehouse to create a sale.",
+                status: 'unsuccess'
+            });
         }
 
         // Cash register check
         const cashRegister = await Cash.findOne();
         if (!cashRegister) {
-            return res.status(400).json({ message: 'Cash register not found. Sale creation failed.', status: 'unsuccess' });
+            return res.status(400).json({
+                message: 'Cash register not found. Sale creation failed.',
+                status: 'unsuccess'
+            });
         }
-
         const newSale = new Sale(saleData);
         const productsData = saleData.productsData;
 
         // Prepare update promises for product quantities
         const updatePromises = productsData.map(async (product) => {
-            const { currentID, quantity, ptype, warehouse } = product;
+            const { currentID, quantity, ptype, warehouse, variationValue, batchNumber, isWeight
+            } = product;
 
             if (!mongoose.Types.ObjectId.isValid(currentID)) {
                 throw new Error(`Invalid product ID: ${currentID}`);
@@ -159,28 +152,148 @@ const createSale = async (req, res) => {
 
             const warehouseData = updatedProduct.warehouse.get(warehouse);
             if (!warehouseData) {
-                throw new Error("Sale creation unsuccessful. Please choose products from the default warehouse to create a sale.");
+                throw new Error(`Warehouse ${warehouse} not found for product with ID: ${currentID}`);
             }
 
-            if (ptype === 'Single') {
-                if (warehouseData.productQty < quantity) {
-                    throw new Error(`Insufficient stock for product with ID: ${currentID}`);
+            // Check if product has batches
+            if (updatedProduct.hasBatches) {
+                if (!batchNumber) {
+                    throw new Error(`Batch number is required for product with ID: ${currentID} (has batches)`);
                 }
-                warehouseData.productQty -= quantity;
-            } else if (ptype === 'Variation') {
-                const variationKey = product.variationValue;
-                const variation = warehouseData.variationValues?.get(variationKey);
-                if (!variation) {
-                    throw new Error(`Variation ${variationKey} not found for product with ID: ${currentID}`);
+
+                // Find the specific batch
+                const batch = warehouseData.batches.find(b => b.batchNumber === batchNumber);
+                if (!batch) {
+                    throw new Error(`Batch ${batchNumber} not found in warehouse ${warehouse} for product with ID: ${currentID}`);
                 }
-                if (variation.productQty < quantity) {
-                    throw new Error(`Insufficient stock for variation ${variationKey} of product with ID: ${currentID}`);
+
+                // Handle products with variations
+                if (ptype === 'Variation') {
+                    if (!variationValue) {
+                        throw new Error(`Variation value is required for product with ID: ${currentID} (has variations)`);
+                    }
+                    const variation = batch.variationValues?.get(variationValue);
+                    if (!variation) {
+                        throw new Error(`Variation ${variationValue} not found in batch ${batchNumber} for product with ID: ${currentID}`);
+                    }
+
+                    if (isWeight) {
+                        const currentWeight = Number(variation.totalProductWeight) || 0;
+                        const weightToDeduct = Number(quantity) || 0;
+
+                        if (currentWeight < weightToDeduct) {
+                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
+                        }
+
+                        variation.totalProductWeight = currentWeight - weightToDeduct;
+                    }
+                    else {
+                        if (variation.productQty < quantity) {
+                            throw new Error(`Insufficient quantity for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}`);
+                        }
+                        variation.productQty -= quantity;
+                    }
+
                 }
-                variation.productQty -= quantity;
-            } else {
-                throw new Error(`Invalid product type for product with ID: ${currentID}`);
+                // Handle products without variations
+                else if (ptype === 'Single') {
+                    // Handle weight-based single products with batches
+                    if (isWeight) {
+                        const currentWeight = Number(batch.totalProductWeight) || 0;
+                        const weightToDeduct = Number(quantity) || 0;
+
+                        if (currentWeight < weightToDeduct) {
+                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
+                        }
+
+                        batch.totalProductWeight = currentWeight - weightToDeduct;
+                    }
+                    // Handle quantity-based single products with batches
+                    else {
+                        if (batch.productQty < quantity) {
+                            throw new Error(`Insufficient quantity in batch ${batchNumber} of product ${updatedProduct.name}`);
+                        }
+                        batch.productQty -= quantity;
+                    }
+                } else {
+                    throw new Error(`Invalid product type for product with ID: ${currentID}`);
+                }
             }
 
+            // Handle products without batches
+            else {
+                // Handle products with variations
+                if (ptype === 'Variation') {
+                    if (!variationValue) {
+                        throw new Error(`Variation value is required for product with ID: ${currentID} (has variations)`);
+                    }
+
+                    const variation = warehouseData.variationValues?.get(variationValue);
+                    if (!variation) {
+                        throw new Error(`Variation ${variationValue} not found in warehouse ${warehouse} for product with ID: ${currentID}`);
+                    }
+
+                    // For weighted products with variations
+                    if (isWeight) {
+                        const currentWeight = Number(variation.totalProductWeight) || 0;
+                        const weightToDeduct = Number(quantity) || 0;
+
+                        console.log('Variation weight check:', {
+                            productId: currentID,
+                            variation: variationValue,
+                            currentWeight,
+                            weightToDeduct,
+                            canProceed: currentWeight >= weightToDeduct
+                        });
+
+                        if (currentWeight < weightToDeduct) {
+                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
+                        }
+
+                        variation.totalProductWeight = currentWeight - weightToDeduct;
+                    }
+                    // For non-weighted products with variations
+                    else {
+                        if (variation.productQty < quantity) {
+                            throw new Error(`Insufficient quantity for variation ${variationValue} of product ${updatedProduct.name}`);
+                        }
+                        variation.productQty -= quantity;
+                    }
+
+                    warehouseData.variationValues.set(variationValue, variation);
+                }
+                // Handle Single products without batches (unchanged from your existing code)
+                else if (ptype === 'Single') {
+                    // For weight-based single products without batches
+                    if (isWeight) {
+                        const currentWeight = Number(warehouseData.totalProductWeight) || 0;
+                        const weightToDeduct = Number(quantity) || 0;
+
+                        console.log('Single product weight check:', {
+                            productId: currentID,
+                            currentWeight,
+                            weightToDeduct,
+                            canProceed: currentWeight >= weightToDeduct
+                        });
+
+                        if (currentWeight < weightToDeduct) {
+                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
+                        }
+
+                        warehouseData.totalProductWeight = currentWeight - weightToDeduct;
+                    }
+                    else {
+                        if (warehouseData.productQty < quantity) {
+                            throw new Error(`Insufficient quantity of product ${updatedProduct.name}`);
+                        }
+                        warehouseData.productQty -= quantity;
+                    }
+                } else {
+                    throw new Error(`Invalid product type for product with ID: ${currentID}`);
+                }
+            }
+
+            // Save the updated product
             updatedProduct.warehouse.set(warehouse, warehouseData);
             await updatedProduct.save();
             return updatedProduct;
@@ -204,29 +317,49 @@ const createSale = async (req, res) => {
             console.error("Error creating initial payment record:", paymentErr);
         }
 
-        // Cash register logic (unique to createSale)
+
         const { paidAmount } = saleData;
         cashRegister.totalBalance += parseFloat(paidAmount);
         await cashRegister.save();
 
+        // Generate receipt HTML (same as before)
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         const logoUrl = settings.logo
             ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
             : null;
 
-        // Generate the bill template
+        // Date formatting helper
+        const formatDate = (date) => {
+            if (!date) return '';
+            const d = new Date(date);
+            return d.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+
+        const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
+            const saved = (product.price && product.ourPrice && product.price > product.ourPrice)
+                ? (product.price - product.ourPrice) * product.quantity
+                : 0;
+            return sum + saved + product.specialDiscount;
+        }, 0);
+
         const templateData = {
             settings: {
-                companyName: settings.companyName || 'IDEAZONE',
-                companyAddress: settings.address || 'Address: XXX-XXX-XXXX',
-                companyMobile: settings.companyMobile || 'Phone: XXX-XXX-XXXX',
-                logo: logoUrl,
+                companyName: settings.companyName || '',
+                companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
+                companyMobile: receiptSettings.phone ? (settings.companyMobile || 'Phone: XXX-XXX-XXXX') : '',
+                logo: receiptSettings.logo ? logoUrl : null,
             },
             newSale: {
                 cashierUsername: newSale.cashierUsername || '',
                 invoiceNumber: newSale.invoiceNumber || '',
-                date: newSale.date ? formatDate(newSale.date) : '',
-                customer: newSale.customer || '',
+                date: formatDate(newSale.date),
+                customer: receiptSettings.customer ? (newSale.customer || '') : '',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
                     price: product.applicablePrice || 0,
@@ -236,351 +369,53 @@ const createSale = async (req, res) => {
                 })),
                 baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,
+                totalPcs: newSale.totalPcs || 0,
                 discount: newSale.discountValue || 0,
                 cashBalance: newSale.cashBalance || 0,
                 paymentType: saleData.paymentType.map(payment => ({
                     type: payment.type || 'Unknown',
                     amount: payment.amount || 0,
                 })),
-                note: newSale.note || '',
+                note: receiptSettings.note ? (newSale.note || '') : '',
+                totalSavedAmount: receiptSettings.taxDiscountShipping ?
+                    (totalSavedAmount + newSale.discountValue + newSale.offerValue - newSale.taxValue || 0) :
+                    undefined,
+                barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
             },
         };
 
-        // Generate the bill template
-        const template = `
-        <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
-            <style>
-                /* Base Styles */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                }
-                    {
-                        width: "148mm", // A5 landscape width
-                        minHeight: "210mm", // A5 landscape height
-                        margin: "0 auto",
-                        boxShadow: "none",
-                        pageBreakInside: "avoid"
-                    }
-                
-                <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
-            <style>
-                /* Base Styles */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                }
-                
-                /* Print Styles */
-                @media print {
-                    body, .print-container {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    @page {
-                        size: A5 portrait;
-                        margin: 0;
-                        padding: 0;
-                    }
-                    .product-row {
-                        page-break-inside: avoid;
-                    }
-                    .page-break {
-                        page-break-before: always;
-                    }
-                }
-                
-                /* Receipt Container */
-                .receipt-container {
-                    width: 148mm;
-                    min-height: 210mm;
-                    margin: 0;
-                    padding: 10mm;
-                    background-color: white;
-                    border: 1px solid #d1d5db;
-                    box-shadow: none;
-                    page-break-inside: avoid;
-                }
-                
-                .print-container {
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: space-between;
-                }
-                
-                /* Company Header */
-                .company-header {
-                    text-align: center;
-                    color: #000000;
-                    margin-bottom: 20px;
-                }
-                
-                .logo-container {
-                    width: 100%;
-                    text-align: center;
-                    margin-bottom: 8px;
-                }
-                
-                .logo-placeholder {
-                    height: 60px;
-                    background: linear-gradient(45deg, #8B4513, #D2691E, #F4A460, #DEB887);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    font-weight: bold;
-                    color: #654321;
-                    position: relative;
-                    margin-bottom: 10px;
-                }
-                
-                .company-name {
-                    font-size: 18px;
-                    font-weight: bold;
-                    color: #000000;
-                    margin-bottom: 2px;
-                }
-                
-                .company-tagline {
-                    font-size: 12px;
-                    color: #666;
-                    margin-bottom: 15px;
-                }
-                
-                /* Invoice Meta Section */
-                .invoice-meta {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 10px;
-                    margin-top: 30px;
-                    font-size: 15px;
-                    color: #000000;
-                }
-                
-                .meta-left {
-                    flex: 1;
-                    text-align: left;
-                }
-                
-                .meta-right {
-                    text-align: right;
-                }
-                
-                .meta-item {
-                    margin-bottom: 3px;
-                    color: #000000;
-                }
-                
-                /* Divider Line */
-                .divider {
-                    width: 100%;
-                    border-top: 1px solid #000;
-                    margin: 8px 0;
-                    margin-top: 30px
-                }
-                
-                /* Products Section */
-                .products-section {
-                    margin-top: 40px;
-                }
-                
-                .products-header {
-                    display: flex;
-                    font-weight: bold;
-                    font-size: 15px;
-                    margin-bottom: 8px;
-                    color: #000000;
-                }
-                
-                .col-product {
-                    flex: 3;
-                    text-align: left;
-                }
-                
-                .col-quantity {
-                    flex: 1;
-                    text-align: center;
-                }
-                
-                .col-price {
-                    flex: 1.2;
-                    text-align: right;
-                }
-                
-                .col-subtotal {
-                    flex: 1.2;
-                    text-align: right;
-                }
-                
-                .product-row {
-                    display: flex;
-                    font-size: 14px;
-                    margin-bottom: 5px;
-                    color: #000000;
-                    align-items: flex-start;
-                }
-                
-                .product-name {
-                    word-wrap: break-word;
-                    line-height: 1.2;
-                }
-                
-                /* Payment Summary */
-                .payment-summary {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-top: 18px;
-                    font-size: 15px;
-                    color: #000000;
-                }
-                
-                .payment-left {
-                    flex: 1;
-                }
-                
-                .payment-right {
-                    flex: 1;
-                    text-align: right;
-                }
-                
-                .payment-item {
-                    margin-bottom: 3px;
-                }
-                
-                .summary-row {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 3px;
-                }
-                
-                .summary-row.total {
-                    font-size: 16px;
-                    margin-top: 5px;
-                }
+        switch (newSale.receiptSize || receiptSettings.template) {
+            case '80mm':
+                html = generateReceiptEighty(templateData);
+                barcodeScript = getBarcodeScriptEighty();
+                break;
+            case 'A5':
+                html = generateReceiptA5(templateData);
+                barcodeScript = getBarcodeScriptA5();
+                break;
+            case 'A4':
+                html = generateReceiptA4(templateData);
+                barcodeScript = getBarcodeScriptA4();
+                break;
+            default:
+                throw new Error(`Unknown receipt template: ${receiptSettings.template}`);
+        }
+        const fullHtml = barcodeScript + html;
 
-                .system-by {
-                    font-size: 14px;
-                    text-align: center;
-                    margin-top: 4px;
-                    color: #000000;
-                }
-            </style>
-            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-
-            <!-- Company Header Section -->
-            <div class="receipt-container">
-                <!-- Company Header -->
-                <div class="company-header">
-                    <!-- Logo Container -->
-                    <div style="overflow: hidden; display: flex; justify-content: center; align-items: center; ">
-                    <img src="{{settings.logo}}" alt="Logo" style="max-height: 100px; max-width: 100%; margin: 2px auto;">
-                    </div>
-                </div>
-
-                <!-- Invoice Meta Section -->
-                <div class="invoice-meta">
-                    <!-- Left: Invoice Meta Data -->
-                    <div class="meta-left">
-                        <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
-                        <div class="meta-item"><b>Customer</b></div>
-                        <div class="meta-item">{{newSale.customer}}</div>
-                        <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
-                    </div>
-
-                    <!-- Right: Date -->
-                    <div class="meta-right">
-                        <div class="meta-item"><b>Date</b> {{newSale.date}}</div>
-                    </div>
-                </div>
-
-                <!-- Products Section -->
-                <div class="products-section">
-                    <div class="products-header">
-                        <div class="col-product">Product</div>
-                        <div class="col-quantity">Quantity</div>
-                        <div class="col-price">Unit Price</div>
-                        <div class="col-subtotal">Subtotal</div>
-                    </div>
-
-                    {{#each newSale.productsData}}
-                    <div class="product-row">
-                        <div class="col-product">
-                            <div class="product-name">
-                                {{this.name}}
-                                {{#if this.appliedWholesale}}
-                                    <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
-                                        W
-                                    </span>
-                                {{/if}}
-                            </div>
-                        </div>
-                        <div class="col-quantity">{{this.quantity}} pcs</div>
-                        <div class="col-price">{{formatCurrency this.price}}</div>
-                        <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
-                    </div>
-                    {{/each}}
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- Payment Summary -->
-                <div class="payment-summary">
-                    <div class="payment-left">
-                        {{#each newSale.paymentType}}
-                        <div class="payment-item">
-                            <b>{{this.type}}</b> {{formatCurrency this.amount}}
-                        </div>
-                        {{/each}}
-                        <div class="payment-item">
-                            <b>Total Paid</b> {{formatCurrency newSale.grandTotal}}
-                        </div>
-                    </div>
-
-                    <div class="payment-right">
-                        <!-- Calculate subtotal as sum of all products -->
-                        <div class="summary-row">
-                            <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
-                        </div>
-                        <div class="summary-row">
-                            <span><b>Discount</b></span>
-                            <span>(-) Rs {{formatCurrency newSale.discount}}</span>
-                        </div>
-                        <div class="summary-row total">
-                            <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {{#if newSale.note}}
-                <div style="margin-bottom:10px; font-size: 14px; word-wrap: break-word; overflow-wrap: break-word;">
-                    <p style="font-size: 14px; white-space: pre-wrap; word-break: break-word;">
-                        <b>Note:</b> {{newSale.note}}
-                    </p>
-                </div>
-                {{/if}}
-
-                </div>
-            </div>
-        </div>`;
-        
-        const compiledTemplate = Handlebars.compile(template);
-        const html = compiledTemplate(templateData);
-        await session.commitTransaction();
-        res.status(201).json({ message: 'Sale created successfully!', html, status: 'success' });
-
+        res.status(201).json({
+            message: 'Sale created successfully!',
+            html: fullHtml,
+            status: 'success',
+            sale: newSale
+        });
+   
     } catch (error) {
         console.error('Error saving sale:', error);
-        await session.abortTransaction();
-        res.status(500).json({ message: error.message, status: 'unsuccess' });
-    } finally {
-        session.endSession();
+        res.status(500).json({
+            message: error.message,
+            status: 'unsuccess',
+            error: error.stack
+        });
     }
 };
 
@@ -2090,7 +1925,7 @@ const printInvoice = async (req, res) => {
         Handlebars.registerHelper('isValidNote', function (note, options) {
             return note && note !== 'null' ? options.fn(this) : options.inverse(this);
         });
-                                
+
 
         const compiledTemplate = Handlebars.compile(invoiceTemplate); //  reuse the same template string
         const html = compiledTemplate(templateData);

@@ -166,6 +166,8 @@ router.get('/searchProductByName', barcodeController.searchProductByName);
 
 router.get('/findAllProduct', productController.findAllProducts);
 
+router.get('/findProductByCode/:code', productController.findProductByCode); // This route is used to find a product by its code
+
 router.get('/findproductByCode', productController.findProductById);
 
 router.get('/findProductByName', productController.searchProductByName);

@@ -149,7 +149,13 @@ router.put('/updateStaffRefreshment/:id', staffRefreshmentsController.editStaffR
 
 router.put('/editOffer/:id', OffersController.updateOffer);
 
+router.put('/updateProduct/:id', upload.single('image'), productControll.updateProduct);
 
+router.put(
+  "/updateProductFields/:id",
+  upload.single("image"),
+  productControll.updateProductFields
+);
 
 module.exports = router;
 
