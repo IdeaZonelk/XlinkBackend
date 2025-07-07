@@ -79,8 +79,23 @@ const template = Handlebars.compile(`
         
         <div style="text-align: center; margin-bottom: 10px; page-break-inside: avoid;">
             {{#if settings.logo}}
-            <div style="width: 50mm; height: 20mm; overflow: hidden; display: flex; justify-content: center; align-items: center; margin: 2px auto;">
-                <img src="{{settings.logo}}" alt="Logo" style="width: 100%; height: auto; object-fit: cover;">
+                <div style="
+                    width: 32mm; 
+                    height: 32mm; 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    margin: 0px auto; 
+                    overflow: hidden; 
+                    background: transparent;
+                    ">
+                <img 
+                    src="{{settings.logo}}" 
+                    alt="Logo" 
+                    style="
+                    max-width: 100%; 
+                    max-height: 100%; 
+                    object-fit: contain;">
                 </div>
             {{/if}}
             <p style="margin: 2px 0; font-size: 13px;">{{settings.companyAddress}}</p>
