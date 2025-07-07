@@ -21,10 +21,6 @@ const unitSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    baseUnit: {
-        type: String,
-        required: true
-    },
 });
 
 module.exports = mongoose.model('Unit', unitSchema);
