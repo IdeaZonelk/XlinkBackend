@@ -13,13 +13,11 @@ const ProductUnit = require('../../models/products/productUnits');
 const mongoose = require('mongoose')
 // Create a new product unit
 const createProductUnit = async (req, res) => {
-    const { unitName, shortName, baseUnit } = req.body;
+    const { unitName, shortName} = req.body;
     if (!unitName) {
         return res.status(400).json({ message: 'Unit Name is required' });
     }
-    if (!baseUnit) {
-        return res.status(400).json({ message: 'Base Unit is required' });
-    }
+
     try {
     //  Case-insensitive duplicate check
     const existingUnit = await ProductUnit.findOne({
@@ -32,8 +30,7 @@ const createProductUnit = async (req, res) => {
 
     const newUnit = new ProductUnit({
         unitName,
-        shortName,
-        baseUnit
+        shortName
     });
     
         await newUnit.save();
@@ -94,10 +91,10 @@ const findUnit = async (req, res) => {
 // Update an existing product unit
 const updateProductUnit = async (req, res) => {
     const { id } = req.params;
-    const { unitName, shortName, baseUnit } = req.body;
+    const { unitName, shortName } = req.body;
 
-    if (!unitName || !baseUnit) {
-        return res.status(400).json({ status: "Unsuccessful", message: "Unit Name and Base Unit are required" });
+    if (!unitName) {
+        return res.status(400).json({ status: "Unsuccessful", message: "Unit Name is required" });
     }
 
     try {
@@ -112,7 +109,7 @@ const updateProductUnit = async (req, res) => {
             return res.status(409).json({ status: "Conflict", message: "This unit name already exists" });
         }
 
-        const updatedUnit = await ProductUnit.findByIdAndUpdate(id, { unitName, shortName, baseUnit }, { new: true });
+        const updatedUnit = await ProductUnit.findByIdAndUpdate(id, { unitName, shortName}, { new: true });
         if (!updatedUnit) {
             return res.status(404).json({ status: "Not Found", message: "Unit not found" });
         }
