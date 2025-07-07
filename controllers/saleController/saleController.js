@@ -302,6 +302,22 @@ const createSale = async (req, res) => {
         await Promise.all(updatePromises);
         await newSale.save();
 
+        try {
+            if (newSale.paymentStatus === 'partial' && newSale.paidAmount > 0) {
+                const paymentsToInsert = newSale.paymentType.map(payment => ({
+                saleId: newSale._id,
+                amountToPay: newSale.grandTotal,
+                payingAmount: payment.amount,
+                currentDate: newSale.date || new Date(),
+                paymentType: payment.type
+                }));
+                await SalePayment.insertMany(paymentsToInsert);
+            }
+            } catch (paymentErr) {
+            console.error("Error creating initial payment record:", paymentErr);
+        }
+
+
         const { paidAmount } = saleData;
         cashRegister.totalBalance += parseFloat(paidAmount);
         await cashRegister.save();
@@ -508,6 +524,23 @@ const createNonPosSale = async (req, res) => {
 
         await Promise.all(updatePromises);
         await newSale.save();
+
+        try {
+            if (newSale.paymentStatus === 'partial' && newSale.paidAmount > 0) {
+                const paymentsToInsert = newSale.paymentType.map(payment => ({
+                saleId: newSale._id,
+                amountToPay: newSale.grandTotal,
+                payingAmount: payment.amount,
+                currentDate: newSale.date || new Date(),
+                paymentType: payment.type
+                }));
+                await SalePayment.insertMany(paymentsToInsert);
+            }
+            } catch (paymentErr) {
+            console.error("Error creating initial payment record:", paymentErr);
+            // Optionally log or continue
+        }
+
 
         res.status(201).json({ message: 'Non-POS Sale created successfully!', sale: newSale, status: 'success' });
     } catch (error) {
@@ -1142,6 +1175,8 @@ const searchSale = async (req, res) => {
                 shipping: saleObj.shipping,
                 tax: saleObj.tax,
                 productsData: saleObj.productsData, // Include product details
+                creditDetails: saleObj.creditDetails,
+                useCreditPayment: saleObj.useCreditPayment,
                 createdAt: saleObj.createdAt
                     ? saleObj.createdAt.toISOString().slice(0, 10)
                     : null,
