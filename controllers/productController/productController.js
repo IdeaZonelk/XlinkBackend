@@ -58,7 +58,7 @@ const createProduct = async (req, res) => {
         // Check for missing fields and add to the missingFields array
         if (!name) missingFields.push('name');
         if (!code) missingFields.push('code');
-        if (!barcode) missingFields.push('barcode');
+        // if (!barcode) missingFields.push('barcode');
         if (!category) missingFields.push('category');
         if (!purchase) missingFields.push('purchase');
         if (!saleUnit) missingFields.push('saleUnit');
@@ -132,7 +132,7 @@ const createProduct = async (req, res) => {
             });
         } else if (error.code === 11000) {
             return res.status(400).json({
-                message: 'Duplicate key error',
+                message: 'This Product Code already exists',
                 error: error.message,
             });
         } else {
@@ -238,7 +238,7 @@ const updateProduct = async (req, res) => {
         // Check for missing fields and add to the missingFields array
         if (!updatedProduct.name) missingFields.push('name');
         if (!updatedProduct.code) missingFields.push('code');
-        if (!updatedProduct.barcode) missingFields.push('barcode');
+        // if (!updatedProduct.barcode) missingFields.push('barcode');
         if (!updatedProduct.category) missingFields.push('category');
         if (!updatedProduct.purchase) missingFields.push('purchase');
         if (!updatedProduct.saleUnit) missingFields.push('saleUnit');
@@ -367,7 +367,7 @@ const updateProduct = async (req, res) => {
             });
         } else if (error.code === 11000) {
             return res.status(400).json({
-                message: 'Duplicate key error',
+                message: 'This Product Code already exists',
                 error: error.message,
             });
         } else {
