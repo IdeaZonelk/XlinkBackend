@@ -573,9 +573,6 @@
 
 // module.exports = { createCustomer, walkInCustomer, DeleteCustomer, getCustomerForUpdate, UpdateCustomer, ImportCustomer, searchCustomerByName, fetchCustomers, searchCustomers };
 
-
-
-
 const Customer = require('../../models/customerModel');
 const mongoose = require('mongoose');
 
@@ -628,16 +625,27 @@ const createCustomer = async (req, res) => {
     }
 
     try {
-        // Check for duplicate NIC or Loyalty Reference Number
-        const existingCustomer = await Customer.findOne({
-            $or: [
-                { nic },
-                { 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber }
-            ]
-        });
-        if (existingCustomer) {
+        // Check for duplicate NIC
+        const nicExists = await Customer.findOne({ nic });
+        if (nicExists) {
             return res.status(400).json({
-                message: 'Customer with this NIC or Loyalty Reference Number already exists.',
+                message: 'NIC already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Loyalty Reference Number
+        const loyaltyExists = await Customer.findOne({ 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber });
+        if (loyaltyExists) {
+            return res.status(400).json({
+                message: 'Loyalty Reference Number already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Mobile
+        const mobileExists = await Customer.findOne({ mobile });
+        if (mobileExists) {
+            return res.status(400).json({
+                message: 'Mobile number already exists.',
                 status: 'fail'
             });
         }
@@ -704,16 +712,27 @@ const walkInCustomer = async (req, res) => {
     }
 
     try {
-        // Check for duplicate NIC or Loyalty Reference Number
-        const existingCustomer = await Customer.findOne({
-            $or: [
-                { nic },
-                { 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber }
-            ]
-        });
-        if (existingCustomer) {
+        // Check for duplicate NIC
+        const nicExists = await Customer.findOne({ nic });
+        if (nicExists) {
             return res.status(400).json({
-                message: 'Customer with this NIC or Loyalty Reference Number already exists.',
+                message: 'NIC already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Loyalty Reference Number
+        const loyaltyExists = await Customer.findOne({ 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber });
+        if (loyaltyExists) {
+            return res.status(400).json({
+                message: 'Loyalty Reference Number already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Mobile
+        const mobileExists = await Customer.findOne({ mobile });
+        if (mobileExists) {
+            return res.status(400).json({
+                message: 'Mobile number already exists.',
                 status: 'fail'
             });
         }
@@ -769,15 +788,16 @@ const ImportCustomer = async (req, res) => {
         }
 
         // Check for duplicates
-        const existingCustomers = await Customer.find({
-            $or: validatedCustomers.map((customer) => ({
-                nic: customer.nic,
-                'loyalty.loyaltyReferenceNumber': customer.loyalty.loyaltyReferenceNumber
-            }))
-        });
-
-        if (existingCustomers.length > 0) {
-            return res.status(400).json({ message: 'Some customers already exist', duplicates: existingCustomers });
+        for (const customer of validatedCustomers) {
+            if (await Customer.findOne({ nic: customer.nic })) {
+                return res.status(400).json({ message: `NIC already exists: ${customer.nic}` });
+            }
+            if (await Customer.findOne({ mobile: customer.mobile })) {
+                return res.status(400).json({ message: `Mobile number already exists: ${customer.mobile}` });
+            }
+            if (await Customer.findOne({ 'loyalty.loyaltyReferenceNumber': customer.loyalty.loyaltyReferenceNumber })) {
+                return res.status(400).json({ message: `Loyalty Reference Number already exists: ${customer.loyalty.loyaltyReferenceNumber}` });
+            }
         }
 
         await Customer.insertMany(validatedCustomers);
@@ -847,21 +867,27 @@ const UpdateCustomer = async (req, res) => {
     }
 
     try {
-        // Check for duplicate NIC or Loyalty Reference Number (excluding self)
-        const duplicate = await Customer.findOne({
-            $and: [
-                { _id: { $ne: id } },
-                {
-                    $or: [
-                        { nic },
-                        { 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber }
-                    ]
-                }
-            ]
-        });
-        if (duplicate) {
+        // Check for duplicate NIC (excluding self)
+        const nicExists = await Customer.findOne({ nic, _id: { $ne: id } });
+        if (nicExists) {
             return res.status(400).json({
-                message: 'Another customer with this NIC or Loyalty Reference Number already exists.',
+                message: 'NIC already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Loyalty Reference Number (excluding self)
+        const loyaltyExists = await Customer.findOne({ 'loyalty.loyaltyReferenceNumber': loyaltyReferenceNumber, _id: { $ne: id } });
+        if (loyaltyExists) {
+            return res.status(400).json({
+                message: 'Loyalty Reference Number already exists.',
+                status: 'fail'
+            });
+        }
+        // Check for duplicate Mobile (excluding self)
+        const mobileExists = await Customer.findOne({ mobile, _id: { $ne: id } });
+        if (mobileExists) {
+            return res.status(400).json({
+                message: 'Mobile number already exists.',
                 status: 'fail'
             });
         }
@@ -1014,4 +1040,5 @@ module.exports = {
     fetchCustomers,
     searchCustomers
 };
+
 
