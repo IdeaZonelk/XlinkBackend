@@ -991,9 +991,11 @@ const searchCustomers = async (req, res) => {
     }
 };
 
-// --- Fetch customers (paginated) ---
+
+
 const fetchCustomers = async (req, res) => {
     try {
+        const { keyword = '', searchType } = req.query;
         const size = parseInt(req.query.page?.size) || 10;
         const number = parseInt(req.query.page?.number) || 1;
         const offset = (number - 1) * size;
@@ -1002,12 +1004,29 @@ const fetchCustomers = async (req, res) => {
         if (sort.startsWith('-')) sortOrder[sort.slice(1)] = -1;
         else if (sort) sortOrder[sort] = 1;
 
-        const customers = await Customer.find({})
+        let query = {};
+
+        if (searchType === 'name') {
+            if (!keyword.trim()) {
+                return res.status(400).json({ message: 'Customer not found' });
+            }
+            query.name = { $regex: keyword.trim(), $options: 'i' };
+        } else if (searchType === 'mobile' && keyword.trim()) {
+            query.mobile = keyword.trim();
+        } else if (searchType === 'username' && keyword.trim()) {
+            query.username = keyword.trim();
+        }
+
+        const customers = await Customer.find(query)
             .skip(offset)
             .limit(size)
             .sort(sortOrder);
 
-        const totalCount = await Customer.countDocuments({});
+        if (!customers || customers.length === 0) {
+            return res.status(404).json({ message: 'Customer not found' });
+        }
+
+        const totalCount = await Customer.countDocuments(query);
         const customersData = customers.map(customer => ({
             _id: customer._id,
             name: customer.name,
@@ -1028,6 +1047,8 @@ const fetchCustomers = async (req, res) => {
         return res.status(500).json({ message: 'Internal server error.' });
     }
 };
+
+
 
 module.exports = {
     createCustomer,
