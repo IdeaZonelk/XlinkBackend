@@ -322,7 +322,7 @@ const createSale = async (req, res) => {
         cashRegister.totalBalance += parseFloat(paidAmount);
         await cashRegister.save();
 
-        // Generate receipt HTML (same as before)
+        // Generate receipt HTML 
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         const logoUrl = settings.logo
             ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
@@ -366,6 +366,9 @@ const createSale = async (req, res) => {
                     appliedWholesale: product.appliedWholesale || false,
                     quantity: product.quantity || 0,
                     subtotal: product.subtotal || 0,
+                    specialDiscount: product.specialDiscount || 0,
+                    discount: product.discount || 0,
+                    taxRate: product.taxRate || 0,
                 })),
                 baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,

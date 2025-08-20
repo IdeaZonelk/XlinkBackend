@@ -15,6 +15,23 @@ Handlebars.registerHelper('addOne', function (index) {
     return index + 1;
 });
 
+Handlebars.registerHelper("multiply", function (a, b) {
+  if (isNaN(a) || isNaN(b)) return "0.00";
+  return (a * b).toFixed(2);
+});
+
+Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
+  if (isNaN(price)) return "0.00";
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const t = parseFloat(taxRate) || 0;
+
+  const finalPrice = p - d + (p * t);
+  return finalPrice.toFixed(2);
+});
+
+
+
 const formatDate = (date) => {
     if (!date) return '';
     const d = new Date(date);
@@ -335,20 +352,26 @@ const template = Handlebars.compile(`
     <thead>
         <tr>
             <th style="text-align: left;">PRODUCT</th>
-            <th style="text-align: left;">PRICE</th>
             <th style="text-align: center;">QTY</th>
-            <th style="text-align: left;">WARRANTY</th>
+            <th style="text-align: center;">PRICE</th>
+            <th style="text-align: center;">DISCOUNT</th>
             <th style="text-align: right;">AMOUNT</th>
         </tr>
     </thead>
     <tbody>
         {{#each newSale.productsData}}
         <tr>
-            <td style="text-align: left; text-color: #000000;">{{this.name}}</td>
-            <td style="text-align: left; text-color: #000000;">{{formatCurrency this.price}}</td>
-            <td style="text-align: center; text-color: #000000;;">{{this.quantity}}</td>
-            <td style="text-align: left; text-color: #000000;">{{this.warranty}}</td>
-            <td style="text-align: right; text-color: #000000;">{{formatCurrency this.subtotal}}</td>
+            <td style="text-align: left;">{{this.name}}</td>
+            <td style="text-align: center;">{{this.quantity}}</td>
+            <td style="text-align: center;">
+                {{formatCurrency (finalPrice this.price this.discount this.taxRate)}}
+            </td>
+            <td style="text-align: center;">
+                {{formatCurrency (multiply this.specialDiscount this.quantity)}}
+            </td>
+            <td style="text-align: right;">
+                {{formatCurrency this.subtotal}}
+            </td>
         </tr>
         {{/each}}
     </tbody>

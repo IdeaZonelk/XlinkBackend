@@ -1,64 +1,85 @@
-const Handlebars = require('handlebars');
+const Handlebars = require("handlebars");
 
-Handlebars.registerHelper('formatCurrency', function (number) {
-    if (isNaN(number)) return '0.00';
-    const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split('.');
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${formattedInteger}.${decimalPart}`;
+Handlebars.registerHelper("formatCurrency", function (number) {
+  if (isNaN(number)) return "0.00";
+  const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${formattedInteger}.${decimalPart}`;
 });
 
-Handlebars.registerHelper('countProducts', function (products) {
-    return products?.length || 0;
+Handlebars.registerHelper("countProducts", function (products) {
+  return products?.length || 0;
 });
 
-Handlebars.registerHelper('addOne', function (index) {
-    return index + 1;
+Handlebars.registerHelper("addOne", function (index) {
+  return index + 1;
 });
 
-Handlebars.registerHelper('formatMobile', function (mobileNumber) {
-    if (!mobileNumber) return 'N/A';
-    const digits = mobileNumber.replace(/\D/g, '');
+Handlebars.registerHelper("formatMobile", function (mobileNumber) {
+  if (!mobileNumber) return "N/A";
+  const digits = mobileNumber.replace(/\D/g, "");
 
-    if (digits.length === 10) {
-        return `${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}`;
-    }
+  if (digits.length === 10) {
+    return `${digits.substring(0, 3)}-${digits.substring(
+      3,
+      6
+    )}-${digits.substring(6)}`;
+  }
 
-    return mobileNumber;
+  return mobileNumber;
+});
+
+Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
+  if (isNaN(price)) return "0.00";
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const t = parseFloat(taxRate) || 0;
+
+  const finalPrice = p - d + (p * t);
+  return finalPrice.toFixed(2);
 });
 
 // Register sum helper to calculate total of product subtotals
-Handlebars.registerHelper('sum', function (products) {
-    if (!Array.isArray(products)) return 0;
-    return products.reduce((total, product) => {
-        return total + (product.subtotal || 0);
-    }, 0);
+Handlebars.registerHelper("sum", function (products) {
+  if (!Array.isArray(products)) return 0;
+  return products.reduce((total, product) => {
+    return total + (product.subtotal || 0);
+  }, 0);
 });
 
 // Register subtract helper
-Handlebars.registerHelper('subtract', function (a, b) {
-    return (a || 0) - (b || 0);
+Handlebars.registerHelper("subtract", function (a, b) {
+  return (a || 0) - (b || 0);
 });
 
 // Register formatMobile helper (from previous error)
-Handlebars.registerHelper('formatMobile', function (mobileNumber) {
-    if (!mobileNumber) return 'N/A';
-    const digits = mobileNumber.replace(/\D/g, '');
-    if (digits.length === 10) {
-        return `${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}`;
-    }
-    return mobileNumber;
+Handlebars.registerHelper("formatMobile", function (mobileNumber) {
+  if (!mobileNumber) return "N/A";
+  const digits = mobileNumber.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `${digits.substring(0, 3)}-${digits.substring(
+      3,
+      6
+    )}-${digits.substring(6)}`;
+  }
+  return mobileNumber;
+});
+
+Handlebars.registerHelper("multiply", function (a, b) {
+    if (isNaN(a) || isNaN(b)) return "0.00";
+    return (a * b).toFixed(2);
 });
 
 const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+  if (!date) return "";
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const template = Handlebars.compile(`
@@ -216,18 +237,23 @@ const template = Handlebars.compile(`
                     text-align: left;
                 }
                 
+                .col-discount {
+                    flex: 1.5;
+                    text-align: center;
+                }
+                
                 .col-quantity {
-                    flex: 1;
+                    flex: 1.5;
                     text-align: center;
                 }
                 
                 .col-price {
-                    flex: 1.2;
-                    text-align: right;
+                    flex: 1.5;
+                    text-align: center;
                 }
                 
                 .col-subtotal {
-                    flex: 1.2;
+                    flex: 1.5;
                     text-align: right;
                 }
                 
@@ -318,6 +344,7 @@ const template = Handlebars.compile(`
                         <div class="col-product">Product</div>
                         <div class="col-quantity">Quantity</div>
                         <div class="col-price">Unit Price</div>
+                        <div class="col-discount">Discount</div>
                         <div class="col-subtotal">Subtotal</div>
                     </div>
 
@@ -327,7 +354,8 @@ const template = Handlebars.compile(`
                             <div class="product-name">{{this.name}}</div>
                         </div>
                         <div class="col-quantity">{{this.quantity}} pcs</div>
-                        <div class="col-price">{{formatCurrency this.price}}</div>
+                        <div class="col-price">{{formatCurrency (finalPrice this.price this.discount this.taxRate)}}</div>                        
+                        <div class="col-discount">{{formatCurrency (multiply this.specialDiscount this.quantity)}}</div>
                         <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
                     </div>
                     {{/each}}
@@ -382,19 +410,19 @@ const template = Handlebars.compile(`
         </div>`);
 
 module.exports = {
-    generateReceiptA5: (data) => {
-        // Format the date before passing to template
-       const formattedData = {
-          ...data,
-          newSale: {
-            ...data.newSale,
-            date: formatDate(new Date()),
-          },
-        };
-        return template(formattedData);
-    },
-    getBarcodeScriptA5: () => {
-        return `
+  generateReceiptA5: (data) => {
+    // Format the date before passing to template
+    const formattedData = {
+      ...data,
+      newSale: {
+        ...data.newSale,
+        date: formatDate(new Date()),
+      },
+    };
+    return template(formattedData);
+  },
+  getBarcodeScriptA5: () => {
+    return `
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -409,5 +437,5 @@ module.exports = {
             });
         </script>
         `;
-    }
+  },
 };
