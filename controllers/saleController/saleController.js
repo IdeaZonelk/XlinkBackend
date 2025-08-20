@@ -59,356 +59,440 @@ Handlebars.registerHelper('formatCurrency', function (number) {
 
 const createSale = async (req, res) => {
     try {
-        const saleData = req.body;
-        if (!saleData.invoiceNumber) {
-            throw new Error("Invoice number is missing");
-        }
+      const saleData = req.body;
+      if (!saleData.invoiceNumber) {
+        throw new Error("Invoice number is missing");
+      }
 
-        const receiptSettings = await receiptSettingsSchema.findOne();
-        if (!receiptSettings) {
-            throw new Error("Receipt settings not found");
-        }
+      const receiptSettings = await receiptSettingsSchema.findOne();
+      if (!receiptSettings) {
+        throw new Error("Receipt settings not found");
+      }
 
-        const referenceId = await generateReferenceId('SALE');
-        saleData.refferenceId = referenceId;
-        saleData.invoiceNumber = saleData.invoiceNumber;
+      const referenceId = await generateReferenceId("SALE");
+      saleData.refferenceId = referenceId;
+      saleData.invoiceNumber = saleData.invoiceNumber;
 
-        const settings = await Settings.findOne();
-        if (!settings || !settings.defaultWarehouse) {
-            throw new Error("Default warehouse is not configured in settings.");
-        }
-        const defaultWarehouse = settings.defaultWarehouse;
+      const settings = await Settings.findOne();
+      if (!settings || !settings.defaultWarehouse) {
+        throw new Error("Default warehouse is not configured in settings.");
+      }
+      const defaultWarehouse = settings.defaultWarehouse;
 
-        if (isEmpty(saleData.warehouse) && isEmpty(saleData.warehouseId)) {
-            throw new Error('Warehouse is required.');
-        }
-        if (isEmpty(saleData.refferenceId)) {
-            throw new Error('Reference ID is required.');
-        }
-        if (isEmpty(saleData.date)) {
-            throw new Error('Date is required.');
-        }
-        if (!saleData.productsData || saleData.productsData.length === 0) {
-            throw new Error('Products Data is required.');
-        }
-        if (isEmpty(saleData.paymentStatus)) {
-            throw new Error('Payment Status is required.');
-        }
+      if (isEmpty(saleData.warehouse) && isEmpty(saleData.warehouseId)) {
+        throw new Error("Warehouse is required.");
+      }
+      if (isEmpty(saleData.refferenceId)) {
+        throw new Error("Reference ID is required.");
+      }
+      if (isEmpty(saleData.date)) {
+        throw new Error("Date is required.");
+      }
+      if (!saleData.productsData || saleData.productsData.length === 0) {
+        throw new Error("Products Data is required.");
+      }
+      if (isEmpty(saleData.paymentStatus)) {
+        throw new Error("Payment Status is required.");
+      }
 
-        // Set default values
-        saleData.cashierUsername = saleData.cashierUsername || 'Unknown';
-        saleData.paymentType = saleData.paymentType || 'cash';
-        saleData.orderStatus = saleData.orderStatus || 'ordered';
-        saleData.customer = saleData.customer || 'Unknown';
-        saleData.warehouse = saleData.warehouse || saleData.warehouseId;
+      // Set default values
+      saleData.cashierUsername = saleData.cashierUsername || "Unknown";
+      saleData.paymentType = saleData.paymentType || "cash";
+      saleData.orderStatus = saleData.orderStatus || "ordered";
+      saleData.customer = saleData.customer || "Unknown";
+      saleData.warehouse = saleData.warehouse || saleData.warehouseId;
 
-        if (!Array.isArray(saleData.paymentType)) {
-            return res.status(400).json({ message: 'Invalid paymentType format.', status: 'unsuccess' });
+      if (!Array.isArray(saleData.paymentType)) {
+        return res
+          .status(400)
+          .json({
+            message: "Invalid paymentType format.",
+            status: "unsuccess",
+          });
+      }
+
+      // Process payment types
+      const paymentTypes = saleData.paymentType.map((payment) => {
+        if (!payment.type || !payment.amount) {
+          throw new Error(`Invalid payment type: ${JSON.stringify(payment)}`);
         }
+        return { type: payment.type, amount: Number(payment.amount) };
+      });
+      saleData.paymentType = paymentTypes;
 
-        // Process payment types
-        const paymentTypes = saleData.paymentType.map(payment => {
-            if (!payment.type || !payment.amount) {
-                throw new Error(`Invalid payment type: ${JSON.stringify(payment)}`);
-            }
-            return { type: payment.type, amount: Number(payment.amount) };
+      // Warehouse validation
+      if (saleData.warehouse !== defaultWarehouse) {
+        return res.status(400).json({
+          message:
+            "Sale creation unsuccessful. Please choose products from the default warehouse to create a sale.",
+          status: "unsuccess",
         });
-        saleData.paymentType = paymentTypes;
+      }
 
-        // Warehouse validation
-        if (saleData.warehouse !== defaultWarehouse) {
-            return res.status(400).json({
-                message: "Sale creation unsuccessful. Please choose products from the default warehouse to create a sale.",
-                status: 'unsuccess'
-            });
+      // Cash register check
+      const cashRegister = await Cash.findOne();
+      if (!cashRegister) {
+        return res.status(400).json({
+          message: "Cash register not found. Sale creation failed.",
+          status: "unsuccess",
+        });
+      }
+      const newSale = new Sale(saleData);
+      const productsData = saleData.productsData;
+
+      // Prepare update promises for product quantities
+      const updatePromises = productsData.map(async (product) => {
+        const {
+          currentID,
+          quantity,
+          ptype,
+          warehouse,
+          variationValue,
+          batchNumber,
+          isWeight,
+        } = product;
+
+        if (!mongoose.Types.ObjectId.isValid(currentID)) {
+          throw new Error(`Invalid product ID: ${currentID}`);
+        }
+        if (!warehouse) {
+          throw new Error(
+            `Warehouse not provided for product with ID: ${currentID}`
+          );
+        }
+        const updatedProduct = await Product.findById(currentID);
+        if (!updatedProduct) {
+          throw new Error(`Product not found with ID: ${currentID}`);
         }
 
-        // Cash register check
-        const cashRegister = await Cash.findOne();
-        if (!cashRegister) {
-            return res.status(400).json({
-                message: 'Cash register not found. Sale creation failed.',
-                status: 'unsuccess'
-            });
+        const warehouseData = updatedProduct.warehouse.get(warehouse);
+        if (!warehouseData) {
+          throw new Error(
+            `Warehouse ${warehouse} not found for product with ID: ${currentID}`
+          );
         }
-        const newSale = new Sale(saleData);
-        const productsData = saleData.productsData;
 
-        // Prepare update promises for product quantities
-        const updatePromises = productsData.map(async (product) => {
-            const { currentID, quantity, ptype, warehouse, variationValue, batchNumber, isWeight
-            } = product;
+        // Check if product has batches
+        if (updatedProduct.hasBatches) {
+          if (!batchNumber) {
+            throw new Error(
+              `Batch number is required for product with ID: ${currentID} (has batches)`
+            );
+          }
 
-            if (!mongoose.Types.ObjectId.isValid(currentID)) {
-                throw new Error(`Invalid product ID: ${currentID}`);
+          // Find the specific batch
+          const batch = warehouseData.batches.find(
+            (b) => b.batchNumber === batchNumber
+          );
+          if (!batch) {
+            throw new Error(
+              `Batch ${batchNumber} not found in warehouse ${warehouse} for product with ID: ${currentID}`
+            );
+          }
+
+          // Handle products with variations
+          if (ptype === "Variation") {
+            if (!variationValue) {
+              throw new Error(
+                `Variation value is required for product with ID: ${currentID} (has variations)`
+              );
             }
-            if (!warehouse) {
-                throw new Error(`Warehouse not provided for product with ID: ${currentID}`);
-            }
-            const updatedProduct = await Product.findById(currentID);
-            if (!updatedProduct) {
-                throw new Error(`Product not found with ID: ${currentID}`);
-            }
-
-            const warehouseData = updatedProduct.warehouse.get(warehouse);
-            if (!warehouseData) {
-                throw new Error(`Warehouse ${warehouse} not found for product with ID: ${currentID}`);
-            }
-
-            // Check if product has batches
-            if (updatedProduct.hasBatches) {
-                if (!batchNumber) {
-                    throw new Error(`Batch number is required for product with ID: ${currentID} (has batches)`);
-                }
-
-                // Find the specific batch
-                const batch = warehouseData.batches.find(b => b.batchNumber === batchNumber);
-                if (!batch) {
-                    throw new Error(`Batch ${batchNumber} not found in warehouse ${warehouse} for product with ID: ${currentID}`);
-                }
-
-                // Handle products with variations
-                if (ptype === 'Variation') {
-                    if (!variationValue) {
-                        throw new Error(`Variation value is required for product with ID: ${currentID} (has variations)`);
-                    }
-                    const variation = batch.variationValues?.get(variationValue);
-                    if (!variation) {
-                        throw new Error(`Variation ${variationValue} not found in batch ${batchNumber} for product with ID: ${currentID}`);
-                    }
-
-                    if (isWeight) {
-                        const currentWeight = Number(variation.totalProductWeight) || 0;
-                        const weightToDeduct = Number(quantity) || 0;
-
-                        if (currentWeight < weightToDeduct) {
-                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
-                        }
-
-                        variation.totalProductWeight = currentWeight - weightToDeduct;
-                    }
-                    else {
-                        if (variation.productQty < quantity) {
-                            throw new Error(`Insufficient quantity for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}`);
-                        }
-                        variation.productQty -= quantity;
-                    }
-
-                }
-                // Handle products without variations
-                else if (ptype === 'Single') {
-                    // Handle weight-based single products with batches
-                    if (isWeight) {
-                        const currentWeight = Number(batch.totalProductWeight) || 0;
-                        const weightToDeduct = Number(quantity) || 0;
-
-                        if (currentWeight < weightToDeduct) {
-                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
-                        }
-
-                        batch.totalProductWeight = currentWeight - weightToDeduct;
-                    }
-                    // Handle quantity-based single products with batches
-                    else {
-                        if (batch.productQty < quantity) {
-                            throw new Error(`Insufficient quantity in batch ${batchNumber} of product ${updatedProduct.name}`);
-                        }
-                        batch.productQty -= quantity;
-                    }
-                } else {
-                    throw new Error(`Invalid product type for product with ID: ${currentID}`);
-                }
+            const variation = batch.variationValues?.get(variationValue);
+            if (!variation) {
+              throw new Error(
+                `Variation ${variationValue} not found in batch ${batchNumber} for product with ID: ${currentID}`
+              );
             }
 
-            // Handle products without batches
+            if (isWeight) {
+              const currentWeight = Number(variation.totalProductWeight) || 0;
+              const weightToDeduct = Number(quantity) || 0;
+
+              if (currentWeight < weightToDeduct) {
+                throw new Error(
+                  `Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`
+                );
+              }
+
+              variation.totalProductWeight = currentWeight - weightToDeduct;
+            } else {
+              if (variation.productQty < quantity) {
+                throw new Error(
+                  `Insufficient quantity for variation ${variationValue} in batch ${batchNumber} of product ${updatedProduct.name}`
+                );
+              }
+              variation.productQty -= quantity;
+            }
+          }
+          // Handle products without variations
+          else if (ptype === "Single") {
+            // Handle weight-based single products with batches
+            if (isWeight) {
+              const currentWeight = Number(batch.totalProductWeight) || 0;
+              const weightToDeduct = Number(quantity) || 0;
+
+              if (currentWeight < weightToDeduct) {
+                throw new Error(
+                  `Insufficient weight (${currentWeight} ${updatedProduct.unit}) in batch ${batchNumber} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`
+                );
+              }
+
+              batch.totalProductWeight = currentWeight - weightToDeduct;
+            }
+            // Handle quantity-based single products with batches
             else {
-                // Handle products with variations
-                if (ptype === 'Variation') {
-                    if (!variationValue) {
-                        throw new Error(`Variation value is required for product with ID: ${currentID} (has variations)`);
-                    }
-
-                    const variation = warehouseData.variationValues?.get(variationValue);
-                    if (!variation) {
-                        throw new Error(`Variation ${variationValue} not found in warehouse ${warehouse} for product with ID: ${currentID}`);
-                    }
-
-                    // For weighted products with variations
-                    if (isWeight) {
-                        const currentWeight = Number(variation.totalProductWeight) || 0;
-                        const weightToDeduct = Number(quantity) || 0;
-
-                        console.log('Variation weight check:', {
-                            productId: currentID,
-                            variation: variationValue,
-                            currentWeight,
-                            weightToDeduct,
-                            canProceed: currentWeight >= weightToDeduct
-                        });
-
-                        if (currentWeight < weightToDeduct) {
-                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
-                        }
-
-                        variation.totalProductWeight = currentWeight - weightToDeduct;
-                    }
-                    // For non-weighted products with variations
-                    else {
-                        if (variation.productQty < quantity) {
-                            throw new Error(`Insufficient quantity for variation ${variationValue} of product ${updatedProduct.name}`);
-                        }
-                        variation.productQty -= quantity;
-                    }
-
-                    warehouseData.variationValues.set(variationValue, variation);
-                }
-                // Handle Single products without batches (unchanged from your existing code)
-                else if (ptype === 'Single') {
-                    // For weight-based single products without batches
-                    if (isWeight) {
-                        const currentWeight = Number(warehouseData.totalProductWeight) || 0;
-                        const weightToDeduct = Number(quantity) || 0;
-
-                        console.log('Single product weight check:', {
-                            productId: currentID,
-                            currentWeight,
-                            weightToDeduct,
-                            canProceed: currentWeight >= weightToDeduct
-                        });
-
-                        if (currentWeight < weightToDeduct) {
-                            throw new Error(`Insufficient weight (${currentWeight} ${updatedProduct.unit}) of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`);
-                        }
-
-                        warehouseData.totalProductWeight = currentWeight - weightToDeduct;
-                    }
-                    else {
-                        if (warehouseData.productQty < quantity) {
-                            throw new Error(`Insufficient quantity of product ${updatedProduct.name}`);
-                        }
-                        warehouseData.productQty -= quantity;
-                    }
-                } else {
-                    throw new Error(`Invalid product type for product with ID: ${currentID}`);
-                }
+              if (batch.productQty < quantity) {
+                throw new Error(
+                  `Insufficient quantity in batch ${batchNumber} of product ${updatedProduct.name}`
+                );
+              }
+              batch.productQty -= quantity;
             }
-
-            // Save the updated product
-            updatedProduct.warehouse.set(warehouse, warehouseData);
-            await updatedProduct.save();
-            return updatedProduct;
-        });
-
-        await Promise.all(updatePromises);
-        await newSale.save();
-
-        try {
-            if (newSale.paymentStatus === 'partial' && newSale.paidAmount > 0) {
-                const paymentsToInsert = newSale.paymentType.map(payment => ({
-                saleId: newSale._id,
-                amountToPay: newSale.grandTotal,
-                payingAmount: payment.amount,
-                currentDate: newSale.date || new Date(),
-                paymentType: payment.type
-                }));
-                await SalePayment.insertMany(paymentsToInsert);
-            }
-            } catch (paymentErr) {
-            console.error("Error creating initial payment record:", paymentErr);
+          } else {
+            throw new Error(
+              `Invalid product type for product with ID: ${currentID}`
+            );
+          }
         }
 
+        // Handle products without batches
+        else {
+          // Handle products with variations
+          if (ptype === "Variation") {
+            if (!variationValue) {
+              throw new Error(
+                `Variation value is required for product with ID: ${currentID} (has variations)`
+              );
+            }
 
-        const { paidAmount } = saleData;
-        cashRegister.totalBalance += parseFloat(paidAmount);
-        await cashRegister.save();
+            const variation =
+              warehouseData.variationValues?.get(variationValue);
+            if (!variation) {
+              throw new Error(
+                `Variation ${variationValue} not found in warehouse ${warehouse} for product with ID: ${currentID}`
+              );
+            }
 
-        // Generate receipt HTML (same as before)
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const logoUrl = settings.logo
-            ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
-            : null;
+            // For weighted products with variations
+            if (isWeight) {
+              const currentWeight = Number(variation.totalProductWeight) || 0;
+              const weightToDeduct = Number(quantity) || 0;
 
-        // Date formatting helper
-        const formatDate = (date) => {
-            if (!date) return '';
-            const d = new Date(date);
-            return d.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        };
+              console.log("Variation weight check:", {
+                productId: currentID,
+                variation: variationValue,
+                currentWeight,
+                weightToDeduct,
+                canProceed: currentWeight >= weightToDeduct,
+              });
 
-        const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
-            const saved = (product.price && product.ourPrice && product.price > product.ourPrice)
-                ? (product.price - product.ourPrice) * product.quantity
-                : 0;
-            return sum + saved + product.specialDiscount;
-        }, 0);
+              if (currentWeight < weightToDeduct) {
+                throw new Error(
+                  `Insufficient weight (${currentWeight} ${updatedProduct.unit}) for variation ${variationValue} of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`
+                );
+              }
 
-        const templateData = {
-            settings: {
-                companyName: settings.companyName || '',
-                companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
-                companyMobile: receiptSettings.phone ? (settings.companyMobile || 'Phone: XXX-XXX-XXXX') : '',
-                logo: receiptSettings.logo ? logoUrl : null,
-            },
-            newSale: {
-                cashierUsername: newSale.cashierUsername || '',
-                invoiceNumber: newSale.invoiceNumber || '',
-                date: formatDate(newSale.date),
-                customer: receiptSettings.customer ? (newSale.customer || '') : '',
-                productsData: saleData.productsData.map(product => ({
-                    name: product.name || 'Unnamed Product',
-                    price: product.applicablePrice || 0,
-                    appliedWholesale: product.appliedWholesale || false,
-                    quantity: product.quantity || 0,
-                    subtotal: product.subtotal || 0,
-                })),
-                baseTotal: newSale.baseTotal || 0,
-                grandTotal: newSale.grandTotal || 0,
-                totalPcs: newSale.totalPcs || 0,
-                discount: newSale.discountValue || 0,
-                cashBalance: newSale.cashBalance || 0,
-                paymentType: saleData.paymentType.map(payment => ({
-                    type: payment.type || 'Unknown',
-                    amount: payment.amount || 0,
-                })),
-                note: receiptSettings.note ? (newSale.note || '') : '',
-                totalSavedAmount: receiptSettings.taxDiscountShipping ?
-                    (totalSavedAmount + newSale.discountValue + newSale.offerValue - newSale.taxValue || 0) :
-                    undefined,
-                barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
-            },
-        };
+              variation.totalProductWeight = currentWeight - weightToDeduct;
+            }
+            // For non-weighted products with variations
+            else {
+              if (variation.productQty < quantity) {
+                throw new Error(
+                  `Insufficient quantity for variation ${variationValue} of product ${updatedProduct.name}`
+                );
+              }
+              variation.productQty -= quantity;
+            }
 
-        switch (newSale.receiptSize || receiptSettings.template) {
-            case '80mm':
-                html = generateReceiptEighty(templateData);
-                barcodeScript = getBarcodeScriptEighty();
-                break;
-            case 'A5':
-                html = generateReceiptA5(templateData);
-                barcodeScript = getBarcodeScriptA5();
-                break;
-            case 'A4':
-                html = generateReceiptA4(templateData);
-                barcodeScript = getBarcodeScriptA4();
-                break;
-            default:
-                throw new Error(`Unknown receipt template: ${receiptSettings.template}`);
+            warehouseData.variationValues.set(variationValue, variation);
+          }
+          // Handle Single products without batches (unchanged from your existing code)
+          else if (ptype === "Single") {
+            // For weight-based single products without batches
+            if (isWeight) {
+              const currentWeight =
+                Number(warehouseData.totalProductWeight) || 0;
+              const weightToDeduct = Number(quantity) || 0;
+
+              console.log("Single product weight check:", {
+                productId: currentID,
+                currentWeight,
+                weightToDeduct,
+                canProceed: currentWeight >= weightToDeduct,
+              });
+
+              if (currentWeight < weightToDeduct) {
+                throw new Error(
+                  `Insufficient weight (${currentWeight} ${updatedProduct.unit}) of product ${updatedProduct.name}. Requested: ${weightToDeduct} ${updatedProduct.unit}`
+                );
+              }
+
+              warehouseData.totalProductWeight = currentWeight - weightToDeduct;
+            } else {
+              if (warehouseData.productQty < quantity) {
+                throw new Error(
+                  `Insufficient quantity of product ${updatedProduct.name}`
+                );
+              }
+              warehouseData.productQty -= quantity;
+            }
+          } else {
+            throw new Error(
+              `Invalid product type for product with ID: ${currentID}`
+            );
+          }
         }
-        const fullHtml = barcodeScript + html;
 
-        res.status(201).json({
-            message: 'Sale created successfully!',
-            html: fullHtml,
-            status: 'success',
-            sale: newSale
+        // Save the updated product
+        updatedProduct.warehouse.set(warehouse, warehouseData);
+        await updatedProduct.save();
+        return updatedProduct;
+      });
+
+      await Promise.all(updatePromises);
+      await newSale.save();
+
+      try {
+        if (newSale.paymentStatus === "partial" && newSale.paidAmount > 0) {
+          const paymentsToInsert = newSale.paymentType.map((payment) => ({
+            saleId: newSale._id,
+            amountToPay: newSale.grandTotal,
+            payingAmount: payment.amount,
+            currentDate: newSale.date || new Date(),
+            paymentType: payment.type,
+          }));
+          await SalePayment.insertMany(paymentsToInsert);
+        }
+      } catch (paymentErr) {
+        console.error("Error creating initial payment record:", paymentErr);
+      }
+
+      const { paidAmount } = saleData;
+      cashRegister.totalBalance += parseFloat(paidAmount);
+      await cashRegister.save();
+
+      // Generate receipt HTML
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const logoUrl = settings.logo
+        ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
+        : null;
+
+      // Date formatting helper
+      const formatDate = (date) => {
+        if (!date) return "";
+        const d = new Date(date);
+        return d.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
         });
-   
+      };
+
+      const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
+        const saved =
+          product.price && product.ourPrice && product.price > product.ourPrice
+            ? (product.price - product.ourPrice) * product.quantity
+            : 0;
+        return sum + saved + product.specialDiscount;
+      }, 0);
+
+      // Fetch warranty information for each product using the same pattern as your existing code
+      const productsWithWarranty = await Promise.all(
+        saleData.productsData.map(async (product) => {
+          try {
+            const productDoc = await Product.findById(product.currentID);
+            return {
+              name: product.name || "Unnamed Product",
+              warranty: productDoc?.warranty || "", // Add warranty field
+              price: product.applicablePrice || 0,
+              appliedWholesale: product.appliedWholesale || false,
+              quantity: product.quantity || 0,
+              subtotal: product.subtotal || 0,
+            };
+          } catch (error) {
+            console.error(
+              `Error fetching product ${product.currentID}:`,
+              error
+            );
+            return {
+              name: product.name || "Unnamed Product",
+              warranty: "", // Fallback if product fetch fails
+              price: product.applicablePrice || 0,
+              appliedWholesale: product.appliedWholesale || false,
+              quantity: product.quantity || 0,
+              subtotal: product.subtotal || 0,
+            };
+          }
+        })
+      );
+
+      const templateData = {
+        settings: {
+          companyName: settings.companyName || "",
+          companyAddress: receiptSettings.address
+            ? settings.address || "Address: XXX-XXX-XXXX"
+            : "",
+          companyMobile: receiptSettings.phone
+            ? settings.companyMobile || "Phone: XXX-XXX-XXXX"
+            : "",
+          logo: receiptSettings.logo ? logoUrl : null,
+        },
+        newSale: {
+          cashierUsername: newSale.cashierUsername || "",
+          invoiceNumber: newSale.invoiceNumber || "",
+          date: formatDate(newSale.date),
+          customer: receiptSettings.customer ? newSale.customer || "" : "",
+
+          productsData: productsWithWarranty,
+          
+          baseTotal: newSale.baseTotal || 0,
+          grandTotal: newSale.grandTotal || 0,
+          totalPcs: newSale.totalPcs || 0,
+          discount: newSale.discountValue || 0,
+          cashBalance: newSale.cashBalance || 0,
+          paymentType: saleData.paymentType.map((payment) => ({
+            type: payment.type || "Unknown",
+            amount: payment.amount || 0,
+          })),
+          note: receiptSettings.note ? newSale.note || "" : "",
+          totalSavedAmount: receiptSettings.taxDiscountShipping
+            ? totalSavedAmount +
+                newSale.discountValue +
+                newSale.offerValue -
+                newSale.taxValue || 0
+            : undefined,
+          barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+        },
+      };
+
+      switch (newSale.receiptSize || receiptSettings.template) {
+        case "80mm":
+          html = generateReceiptEighty(templateData);
+          barcodeScript = getBarcodeScriptEighty();
+          break;
+        case "A5":
+          html = generateReceiptA5(templateData);
+          barcodeScript = getBarcodeScriptA5();
+          break;
+        case "A4":
+          html = generateReceiptA4(templateData);
+          barcodeScript = getBarcodeScriptA4();
+          break;
+        default:
+          throw new Error(
+            `Unknown receipt template: ${receiptSettings.template}`
+          );
+      }
+      const fullHtml = barcodeScript + html;
+
+      res.status(201).json({
+        message: "Sale created successfully!",
+        html: fullHtml,
+        status: "success",
+        sale: newSale,
+      });
     } catch (error) {
         console.error('Error saving sale:', error);
         res.status(500).json({

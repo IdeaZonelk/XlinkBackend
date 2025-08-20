@@ -337,17 +337,22 @@ const template = Handlebars.compile(`
             <th style="text-align: left;">PRODUCT</th>
             <th style="text-align: left;">PRICE</th>
             <th style="text-align: center;">QTY</th>
-            <th style="text-align: left;">WARRANTY</th>
             <th style="text-align: right;">AMOUNT</th>
         </tr>
     </thead>
     <tbody>
         {{#each newSale.productsData}}
         <tr>
-            <td style="text-align: left; text-color: #000000;">{{this.name}}</td>
+                        <td style="text-align: left; text-color: #000000;">
+                            {{this.name}}
+                            {{#if this.warranty}}
+                                <span style="font-size: 11px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
+                                    ({{this.warranty}} warranty)
+                                </span>
+                            {{/if}}
+                        </td>
             <td style="text-align: left; text-color: #000000;">{{formatCurrency this.price}}</td>
             <td style="text-align: center; text-color: #000000;;">{{this.quantity}}</td>
-            <td style="text-align: left; text-color: #000000;">{{this.warranty}}</td>
             <td style="text-align: right; text-color: #000000;">{{formatCurrency this.subtotal}}</td>
         </tr>
         {{/each}}
