@@ -12,11 +12,11 @@
 const Purchase = require('../../models/purchaseModel');
 const PurchaseReturn = require('../../models/purchaseReturnModel');
 const Sale = require('../../models/saleModel');
+const Cash = require('../../models/posModel/cashModel')
 const SaleReturn = require('../../models/saleReturnModel');
 const Customer = require('../../models/customerModel');
 const Expenses = require('../../models/expensesModel');
 
-//Get warehouse report
 const getReportData = async (req, res) => {
     const { warehouse } = req.params;
     try {
@@ -106,8 +106,6 @@ const getFillteredReportData = async (req, res) => {
     }
 };
 
-
-// Get customer report with sales data
 const allCustomerReport = async (req, res) => {
     const { name } = req.params;
     console.log(name)
@@ -148,8 +146,6 @@ const allCustomerReport = async (req, res) => {
     }
 }
 
-
-// Get customer report by ID with sales data
 const allCustomerReportById = async (req, res) => {
     const { name } = req.params
     try {
@@ -186,7 +182,6 @@ const allCustomerReportById = async (req, res) => {
     }
 }
 
-// Get customer report by customer name with sales data
 const findReportByCustomer = async (req, res) => {
     const { name } = req.query;
 
@@ -232,14 +227,25 @@ const findReportByCustomer = async (req, res) => {
 
 const getTodayReportData = async (req, res) => {
     const { warehouse } = req.params;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+    const SRI_LANKA_OFFSET_MINUTES = 5.5 * 60;
+
+    const now = new Date();
+    const utcYear = now.getUTCFullYear();
+    const utcMonth = now.getUTCMonth();
+    const utcDate = now.getUTCDate();
+    const startOfDay = new Date(Date.UTC(utcYear, utcMonth, utcDate, 0, 0, 0) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
+    const endOfDay = new Date(Date.UTC(utcYear, utcMonth, utcDate + 1, 0, 0, 0) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000 - 1);
+
+    console.log("Today Report Date Range:", startOfDay.toISOString(), endOfDay.toISOString());
 
     try {
         const warehouseFilter = warehouse === 'all' ? {} : { warehouse };
-        const dateFilter = { date: { $gte: today, $lt: tomorrow } };
+        const dateFilter = {
+            date: {
+                $gte: startOfDay,
+                $lt: endOfDay
+            }
+        };
         const filter = { ...warehouseFilter, ...dateFilter };
         const [sales, saleReturns, purchases, purchaseReturns, expenses] = await Promise.all([
             Sale.find(filter),
@@ -248,7 +254,6 @@ const getTodayReportData = async (req, res) => {
             PurchaseReturn.find(filter),
             Expenses.find(filter)
         ]);
-
         res.status(200).json({
             message: 'Today report data fetched successfully',
             data: {
@@ -259,22 +264,108 @@ const getTodayReportData = async (req, res) => {
                 expenses
             }
         });
+
     } catch (error) {
         console.error("Error getting today report data:", error);
-        return res.status(500).json({ message: 'Server Error', status: 'fail', error: 'Something went wrong, please try again later.' });
+        return res.status(500).json({
+            message: 'Server Error',
+            status: 'fail',
+            error: 'Something went wrong, please try again later.'
+        });
+    }
+};
+
+const getZReportData = async (req, res) => {
+    const { cashRegisterID } = req.params;
+
+    try {
+        // 1. Find the cash register
+        const cashRegister = await Cash.findById(cashRegisterID);
+        if (!cashRegister) {
+            return res.status(404).json({
+                message: 'Cash register not found',
+                status: 'fail'
+            });
+        }
+
+        // 2. Get sales for this register - Match EXACT field names from your documents
+        const salesFilter = {
+            cashRegisterID: cashRegisterID, 
+            saleType: "POS"
+        };
+
+        console.log("Sales Filter:", salesFilter);
+
+        const sales = await Sale.find(salesFilter)
+            .sort({ date: 1 })
+            .lean();
+
+        // 3. Calculate totals
+        const totals = {
+            grandTotal: 0,
+            pureProfit: 0,
+            totalTransactions: sales.length,
+            cashBalance: 0
+        };
+
+        sales.forEach(sale => {
+            totals.grandTotal += parseFloat(sale.grandTotal) || 0;
+            totals.pureProfit += parseFloat(sale.pureProfit) || 0;
+            totals.cashBalance += parseFloat(sale.cashBalance) || 0;
+        });
+
+        // 4. Prepare response
+        res.status(200).json({
+            message: 'Z-Report data fetched successfully',
+            data: {
+                sales,
+                totals,
+                registerInfo: {
+                    openTime: cashRegister.openTime,
+                    currentTime: new Date().toString(),
+                    cashier: cashRegister.name || cashRegister.username,
+                    startingBalance: cashRegister.totalBalance,
+                    registerId: cashRegister._id,
+                    timezone: "Asia/Colombo (UTC+5:30)"
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Error in getZReportData:", error);
+        res.status(500).json({
+            message: 'Server Error',
+            status: 'fail',
+            error: error.message
+        });
     }
 };
 
 const getLastWeekReportData = async (req, res) => {
     const { warehouse } = req.params;
-    const today = new Date();
-    const lastWeek = new Date(today);
-    lastWeek.setDate(today.getDate() - 7);
+    const SRI_LANKA_OFFSET_MINUTES = 5.5 * 60; 
+
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        0, 0, 0, 0
+    ) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
+
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const lastWeekStart = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     try {
         const warehouseFilter = warehouse === 'all' ? {} : { warehouse };
-        const dateFilter = { date: { $gte: lastWeek, $lt: today } };
+        const dateFilter = {
+            date: {
+                $gte: lastWeekStart,
+                $lte: todayEnd
+            }
+        };
         const filter = { ...warehouseFilter, ...dateFilter };
+
         const [sales, saleReturns, purchases, purchaseReturns, expenses] = await Promise.all([
             Sale.find(filter),
             SaleReturn.find(filter),
@@ -285,30 +376,49 @@ const getLastWeekReportData = async (req, res) => {
 
         res.status(200).json({
             message: 'Last week report data fetched successfully',
-            data: {
-                sales,
-                saleReturns,
-                purchases,
-                purchaseReturns,
-                expenses
-            }
+            data: { sales, saleReturns, purchases, purchaseReturns, expenses }
         });
     } catch (error) {
         console.error("Error getting last week report data:", error);
-        return res.status(500).json({ message: 'Server Error', status: 'fail', error: 'Something went wrong, please try again later.' });
+        return res.status(500).json({
+            message: 'Server Error',
+            status: 'fail',
+            error: 'Something went wrong, please try again later.'
+        });
     }
 };
 
 const getLastMonthReportData = async (req, res) => {
     const { warehouse } = req.params;
-    const today = new Date();
-    const lastMonth = new Date(today);
-    lastMonth.setMonth(today.getMonth() - 1);
+    const SRI_LANKA_OFFSET_MINUTES = 5.5 * 60;
+    const now = new Date();
+
+    const todayStart = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        0, 0, 0, 0
+    ) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
+
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    const lastMonthStart = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() - 1,
+        now.getUTCDate(),
+        0, 0, 0, 0
+    ) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
 
     try {
         const warehouseFilter = warehouse === 'all' ? {} : { warehouse };
-        const dateFilter = { date: { $gte: lastMonth, $lt: today } };
+        const dateFilter = {
+            date: {
+                $gte: lastMonthStart,
+                $lte: todayEnd
+            }
+        };
         const filter = { ...warehouseFilter, ...dateFilter };
+
         const [sales, saleReturns, purchases, purchaseReturns, expenses] = await Promise.all([
             Sale.find(filter),
             SaleReturn.find(filter),
@@ -319,30 +429,49 @@ const getLastMonthReportData = async (req, res) => {
 
         res.status(200).json({
             message: 'Last month report data fetched successfully',
-            data: {
-                sales,
-                saleReturns,
-                purchases,
-                purchaseReturns,
-                expenses
-            }
+            data: { sales, saleReturns, purchases, purchaseReturns, expenses }
         });
     } catch (error) {
         console.error("Error getting last month report data:", error);
-        return res.status(500).json({ message: 'Server Error', status: 'fail', error: 'Something went wrong, please try again later.' });
+        return res.status(500).json({
+            message: 'Server Error',
+            status: 'fail',
+            error: 'Something went wrong, please try again later.'
+        });
     }
 };
 
 const getLastYearReportData = async (req, res) => {
     const { warehouse } = req.params;
-    const today = new Date();
-    const lastYear = new Date(today);
-    lastYear.setFullYear(today.getFullYear() - 1);
+    const SRI_LANKA_OFFSET_MINUTES = 5.5 * 60; 
+    const now = new Date();
+
+    const todayStart = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        0, 0, 0, 0
+    ) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
+
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    const lastYearStart = new Date(Date.UTC(
+        now.getUTCFullYear() - 1,
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        0, 0, 0, 0
+    ) - SRI_LANKA_OFFSET_MINUTES * 60 * 1000);
 
     try {
         const warehouseFilter = warehouse === 'all' ? {} : { warehouse };
-        const dateFilter = { date: { $gte: lastYear, $lt: today } };
+        const dateFilter = {
+            date: {
+                $gte: lastYearStart,
+                $lte: todayEnd
+            }
+        };
         const filter = { ...warehouseFilter, ...dateFilter };
+
         const [sales, saleReturns, purchases, purchaseReturns, expenses] = await Promise.all([
             Sale.find(filter),
             SaleReturn.find(filter),
@@ -353,19 +482,17 @@ const getLastYearReportData = async (req, res) => {
 
         res.status(200).json({
             message: 'Last year report data fetched successfully',
-            data: {
-                sales,
-                saleReturns,
-                purchases,
-                purchaseReturns,
-                expenses
-            }
+            data: { sales, saleReturns, purchases, purchaseReturns, expenses }
         });
     } catch (error) {
         console.error("Error getting last year report data:", error);
-        return res.status(500).json({ message: 'Server Error', status: 'fail', error: 'Something went wrong, please try again later.' });
+        return res.status(500).json({
+            message: 'Server Error',
+            status: 'fail',
+            error: 'Something went wrong, please try again later.'
+        });
     }
-};
+}
 
 module.exports = { getReportData, allCustomerReport, allCustomerReportById, findReportByCustomer, getFillteredReportData, getTodayReportData, 
-                   getLastWeekReportData, getLastMonthReportData, getLastYearReportData };
+                   getLastWeekReportData, getLastMonthReportData, getLastYearReportData, getZReportData};
