@@ -15,6 +15,7 @@ const Product = require('../../models/products/product');
 const Settings = require('../../models/settingsModel')
 const SaleReturn = require('../../models/saleReturnModel')
 const Cash = require('../../models/posModel/cashModel');
+const Customers = require('../../models/customerModel');
 const mongoose = require('mongoose');
 const { isEmpty } = require('lodash');
 const Quatation = require('../../models/quatationModel');
@@ -72,6 +73,9 @@ const createSale = async (req, res) => {
         const referenceId = await generateReferenceId('SALE');
         saleData.refferenceId = referenceId;
         saleData.invoiceNumber = saleData.invoiceNumber;
+
+        saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+        saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
 
         const settings = await Settings.findOne();
         if (!settings || !settings.defaultWarehouse) {
@@ -302,6 +306,59 @@ const createSale = async (req, res) => {
         await Promise.all(updatePromises);
         await newSale.save();
 
+            try {
+            const claimedPoints = saleData.claimedPoints || 0;
+            const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
+            
+            // Only proceed if there are points to update
+            if (claimedPoints > 0 || redeemedPointsFromSale > 0) {
+                if (saleData.customer && saleData.customer !== 'Unknown') {
+                    let customer;
+                    
+                    // Try to find by ID first (if you modify frontend to send ID)
+                    if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
+                        customer = await Customers.findById(saleData.customer);
+                    }
+                    
+                    // If not found by ID, try to find by name
+                    if (!customer) {
+                        customer = await Customers.findOne({ 
+                            name: saleData.customer 
+                        });
+                    }
+
+                    if (customer) {
+                        // Initialize loyalty object if it doesn't exist
+                        if (!customer.loyalty) {
+                            customer.loyalty = {
+                                loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+                                redeemedPoints: 0
+                            };
+                        }
+
+                        const currentRedeemedPoints = Number(customer.loyalty.redeemedPoints) || 0;
+                        
+                        // Validate that claimed points don't exceed available points
+                        if (claimedPoints > currentRedeemedPoints) {
+                            console.warn(`Claimed points (${claimedPoints}) exceed available points (${currentRedeemedPoints}) for customer ${customer.name}`);
+                        }
+
+                        // Calculate new redeemed points
+                        const newRedeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + redeemedPointsFromSale;
+
+                        customer.loyalty.redeemedPoints = newRedeemedPoints;
+                        await customer.save();
+                        
+                        console.log(`Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints}`);
+                    } else {
+                        console.warn(`Customer ${saleData.customer} not found for points update`);
+                    }
+                }
+            }
+        } catch (pointsError) {
+            console.error('Error updating customer loyalty points:', pointsError);
+        }
+
         try {
             if (newSale.paymentStatus === 'partial' && newSale.paidAmount > 0) {
                 const paymentsToInsert = newSale.paymentType.map(payment => ({
@@ -381,6 +438,8 @@ const createSale = async (req, res) => {
                     (totalSavedAmount + newSale.discountValue + newSale.offerValue - newSale.taxValue || 0) :
                     undefined,
                 barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+                 claimedPoints: newSale.claimedPoints || 0, 
+        redeemedPointsFromSale: newSale.redeemedPointsFromSale || 0, 
             },
         };
 
@@ -424,6 +483,9 @@ const createNonPosSale = async (req, res) => {
         const saleData = req.body;
         const referenceId = await generateReferenceId('SALE');
         saleData.refferenceId = referenceId;
+
+        saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+        saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
 
         // Validation checks using isEmpty
         if (isEmpty(saleData.warehouse) && isEmpty(saleData.warehouseId)) {
@@ -525,6 +587,60 @@ const createNonPosSale = async (req, res) => {
         await Promise.all(updatePromises);
         await newSale.save();
 
+         try {
+            const claimedPoints = saleData.claimedPoints || 0;
+            const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
+            
+            // Only proceed if there are points to update
+            if (claimedPoints > 0 || redeemedPointsFromSale > 0) {
+                if (saleData.customer && saleData.customer !== 'Unknown') {
+                    let customer;
+                    
+                    // Try to find by ID first (if you modify frontend to send ID)
+                    if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
+                        customer = await Customers.findById(saleData.customer);
+                    }
+                    
+                    // If not found by ID, try to find by name
+                    if (!customer) {
+                        customer = await Customers.findOne({ 
+                            name: saleData.customer 
+                        });
+                    }
+
+                    if (customer) {
+                        // Initialize loyalty object if it doesn't exist
+                        if (!customer.loyalty) {
+                            customer.loyalty = {
+                                loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+                                redeemedPoints: 0
+                            };
+                        }
+
+                        const currentRedeemedPoints = Number(customer.loyalty.redeemedPoints) || 0;
+                        
+                        // Validate that claimed points don't exceed available points
+                        if (claimedPoints > currentRedeemedPoints) {
+                            console.warn(`Claimed points (${claimedPoints}) exceed available points (${currentRedeemedPoints}) for customer ${customer.name}`);
+                        }
+
+                        // Calculate new redeemed points
+                        const newRedeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + redeemedPointsFromSale;
+
+                        customer.loyalty.redeemedPoints = newRedeemedPoints;
+                        await customer.save();
+                        
+                        console.log(`Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints}`);
+                    } else {
+                        console.warn(`Customer ${saleData.customer} not found for points update`);
+                    }
+                }
+            }
+        } catch (pointsError) {
+            console.error('Error updating customer loyalty points:', pointsError);
+        }
+
+
         try {
             if (newSale.paymentStatus === 'partial' && newSale.paidAmount > 0) {
                 const paymentsToInsert = newSale.paymentType.map(payment => ({
@@ -538,10 +654,7 @@ const createNonPosSale = async (req, res) => {
             }
             } catch (paymentErr) {
             console.error("Error creating initial payment record:", paymentErr);
-            // Optionally log or continue
         }
-
-
         res.status(201).json({ message: 'Non-POS Sale created successfully!', sale: newSale, status: 'success' });
     } catch (error) {
         console.error('Error saving Non-POS sale:', error);

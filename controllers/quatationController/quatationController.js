@@ -11,6 +11,7 @@
 
 const Quatation = require('../../models/quatationModel')
 const Product = require('../../models/products/product');
+const Customers = require('../../models/customerModel');
 const mongoose = require('mongoose');
 
 //Create a quotation
@@ -106,9 +107,21 @@ const findQuatationById = async (req, res) => {
 
     try {
         // Find the sale by ID
-        const quatation = await Quatation.findById(id);
+        const quatation = await Quatation.findById(id).populate('customer', 'name loyalty');
         if (!quatation) {
             return res.status(404).json({ message: 'quatation not found' });
+        }
+
+        let customer = null;
+        let redeemedPoints = 0;
+        let customerName = quatation.customerName;
+
+          if (quatation.customer && mongoose.Types.ObjectId.isValid(quatation.customer)) {
+            customer = await Customers.findById(quatation.customer);
+            if (customer) {
+                redeemedPoints = customer.loyalty?.redeemedPoints || 0;
+                customerName = customer.name || customerName;
+            }
         }
 
         // Extract product IDs from the sale's productsData
@@ -178,6 +191,8 @@ const findQuatationById = async (req, res) => {
         // Combine sale with the updated product details
         const quatationWithUpdatedProducts = {
             ...quatation.toObject(), // Spread existing sale fields
+            customerName: customerName,
+            redeemedPoints: redeemedPoints,
             productsData: updatedProductsData // Attach updated products data
         };
 
@@ -300,7 +315,7 @@ const getQuatation = async (req, res) => {
                 return res.status(400).json({ message: 'Invalid quotation ID format' });
             }
 
-            const quatation = await Quatation.findById(id);
+            const quatation = await Quatation.findById(id).populate('customer', 'name');
             if (!quatation) {
                 return res.status(404).json({ message: 'Quotation not found' });
             }
@@ -341,7 +356,9 @@ const getQuatation = async (req, res) => {
                 return res.status(400).json({ message: 'Please provide at least one character.' });
             }
 
-            const quatations = await Quatation.find({ customer: { $regex: `^${customerName}`, $options: 'i' } });
+            const quatations = await Quatation.find({ customer: { $regex: `^${customerName}`, $options: 'i' } })
+                .populate('customer', 'name');
+            
             if (quatations.length === 0) {
                 return res.status(404).json({ message: 'No quotations found for this customer' });
             }
@@ -357,10 +374,10 @@ const getQuatation = async (req, res) => {
 
             if (req.query?.page) {
                 const quatations = await Quatation.find()
-    .sort({ createdAt: -1 }) // Sorting by createdAt in descending order
-    .skip(offset)
-    .limit(size);
-
+                    .populate('customer', 'name') // Populate customer name
+                    .sort({ createdAt: -1 })
+                    .skip(offset)
+                    .limit(size);
 
                 if (!quatations || quatations.length === 0) {
                     return res.status(404).json({ message: "No quotations found." });
@@ -379,7 +396,7 @@ const getQuatation = async (req, res) => {
                 });
             }
 
-            const quatations = await Quatation.find();
+            const quatations = await Quatation.find().populate('customer', 'name');
             return res.status(200).json({
                 message: 'Quotations fetched successfully',
                 data: quatations
