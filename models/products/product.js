@@ -58,6 +58,7 @@ const productSchema = new mongoose.Schema({
   ptype: { type: String, required: true },
   quantityLimit: { type: Number },
   supplier: { type: String,  },
+  warranty: { type: String, default: '' },
   warehouse: { type: Map, of: warehouseSchema },
   variation: { type: String },
   status: { type: String, default: 'Pending' },
