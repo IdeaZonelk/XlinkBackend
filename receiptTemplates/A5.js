@@ -351,7 +351,13 @@ const template = Handlebars.compile(`
                     {{#each newSale.productsData}}
                     <div class="product-row">
                         <div class="col-product">
-                            <div class="product-name">{{this.name}}</div>
+                            <div class="product-name">{{this.name}} 
+                                {{#if this.warranty}}
+                                <span style="font-size: 11px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
+                                    ({{this.warranty}} warranty)
+                                </span>
+                            {{/if}}
+                            </div>
                         </div>
                         <div class="col-quantity">{{this.quantity}} pcs</div>
                         <div class="col-price">{{formatCurrency (finalPrice this.price this.discount this.taxRate)}}</div>                        

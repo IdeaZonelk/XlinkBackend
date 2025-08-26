@@ -1,21 +1,21 @@
-const Handlebars = require('handlebars');
+const Handlebars = require("handlebars");
 
-Handlebars.registerHelper('formatCurrency', function (number) {
-    if (isNaN(number)) return '0.00';
-    const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split('.');
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${formattedInteger}.${decimalPart}`;
+Handlebars.registerHelper("formatCurrency", function (number) {
+  if (isNaN(number)) return "0.00";
+  const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${formattedInteger}.${decimalPart}`;
 });
 
-Handlebars.registerHelper('countProducts', function (products) {
-    return products?.length || 0;
+Handlebars.registerHelper("countProducts", function (products) {
+  return products?.length || 0;
 });
 
-Handlebars.registerHelper('addOne', function (index) {
-    return index + 1;
+Handlebars.registerHelper("addOne", function (index) {
+  return index + 1;
 });
 
-Handlebars.registerHelper('abs', function (value) {
+Handlebars.registerHelper("abs", function (value) {
   return Math.abs(value);
 });
 
@@ -39,15 +39,15 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
 });
 
 const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+  if (!date) return "";
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const template = Handlebars.compile(`
@@ -140,6 +140,11 @@ const template = Handlebars.compile(`
             <tr>
                 <td colspan="5" style="font-size: 13px; font-weight: bold; padding-top: 6px; padding-bottom: 2px;">
                     {{addOne @index}}. {{this.name}}
+                    {{#if this.warranty}}
+                        <span style="font-size: 11px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
+                        ({{this.warranty}} warranty)
+                        </span>
+                    {{/if}}
                 </td>
             </tr>
 
@@ -225,19 +230,19 @@ const template = Handlebars.compile(`
 `);
 
 module.exports = {
-    generateReceiptEighty: (data) => {
-        // Format the date before passing to template
-        const formattedData = {
-          ...data,
-          newSale: {
-            ...data.newSale,
-            date: formatDate(new Date()),
-          },
-        };
-        return template(formattedData);
-    },
-    getBarcodeScriptEighty: () => {
-        return `
+  generateReceiptEighty: (data) => {
+    // Format the date before passing to template
+    const formattedData = {
+      ...data,
+      newSale: {
+        ...data.newSale,
+        date: formatDate(new Date()),
+      },
+    };
+    return template(formattedData);
+  },
+  getBarcodeScriptEighty: () => {
+    return `
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -252,5 +257,5 @@ module.exports = {
             });
         </script>
         `;
-    }
+  },
 };

@@ -11,25 +11,70 @@
 
 const mongoose = require('mongoose');
 
-const DenominationSchema = new mongoose.Schema({
-  denomination: { type: Number, required: true },
-  quantity: { type: Number, required: true },
-  amount: { type: Number, required: true }
-});
-
 const ZReadingSchema = new mongoose.Schema({
-  cardPaymentAmount: { type: Number, required: true },
-  cashPaymentAmount: { type: Number, required: true },
-  bankTransferPaymentAmount: { type: Number, required: true },
-  totalDiscountAmount: { type: Number, required: true },
-  inputs: [DenominationSchema],
-  registerData: {
-    type: Map, 
-    of: mongoose.Schema.Types.Mixed, 
-    default: {}
+  createdAt: {
+    type: Date,
+    default: Date.now
   },
-  cashVariance: { type: Number, required: true },
-  createdAt: { type: Date, default: Date.now }
+  registers: [{
+    cashRegisterID: {
+      type: String,
+      required: true
+    },
+    cashierName: {
+      type: String,
+      required: true
+    },
+    openedTime: {
+      type: String,
+      required: true
+    },
+    inputs: [{
+      denomination: Number,
+      quantity: Number,
+      amount: Number
+    }],
+    cardPaymentAmount: {
+      type: Number,
+      default: 0
+    },
+    cashPaymentAmount: {
+      type: Number,
+      default: 0
+    },
+    bankTransferPaymentAmount: {
+      type: Number,
+      default: 0
+    },
+    totalProfitAmount: {
+      type: Number,
+      required: true, default: 0
+    },
+    totalDiscountAmount: {
+      type: Number,
+      default: 0
+    },
+    totalAmount: {
+      type: Number,
+      required: true
+    },
+    grandTotal: {
+      type: Number,
+      required: true
+    },
+    cashHandIn: {
+      type: Number,
+      default: 0
+    },
+    cashVariance: {
+      type: Number,
+      default: 0
+    },
+    closedTime: {
+      type: Date,
+      required: true
+    }
+  }]
 });
 
 module.exports = mongoose.model('ZReading', ZReadingSchema);
