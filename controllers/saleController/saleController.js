@@ -9,6 +9,7 @@
  * Contact info@ideazone.lk for more information.
  */
 
+
 const Sale = require('../../models/saleModel')
 const SalePayment = require('../../models/salePaymentModel')
 const Product = require('../../models/products/product');
