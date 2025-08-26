@@ -23,6 +23,21 @@ Handlebars.registerHelper("eq", function (a, b) {
   return a === b;
 });
 
+Handlebars.registerHelper("multiply", function (a, b) {
+  if (isNaN(a) || isNaN(b)) return "0.00";
+  return (a * b).toFixed(2);
+});
+
+Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
+  if (isNaN(price)) return "0.00";
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const t = parseFloat(taxRate) || 0;
+
+  const finalPrice = p - d + (p * t);
+  return finalPrice.toFixed(2);
+});
+
 const formatDate = (date) => {
   if (!date) return "";
   const d = new Date(date);
@@ -114,9 +129,9 @@ const template = Handlebars.compile(`
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
             <thead>
                 <tr>
-                    <th colspan="2" style="text-align: left; font-size: 13px; padding-left:20px ">Normal<br>Price</th>
-                    <th style="text-align: left; font-size: 13px; padding-left:20px">Our<br>Price</th>
+                    <th colspan="2" style="text-align: left; font-size: 13px; padding-left:20px ">Price</th>
                     <th style="text-align: center; font-size: 13px; vertical-align: top; padding-left:20px">Qty</th>
+                    <th style="text-align: center; font-size: 13px; padding-left:5px">Discount</th>
                     <th style="text-align: right; font-size: 13px; vertical-align: top;">Amount</th>
                 </tr>
             </thead>
@@ -135,9 +150,9 @@ const template = Handlebars.compile(`
 
             <tr>
                 <td></td>
-                <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency this.price}}</td>
-                <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency this.ourPrice}}</td>
-                <td style="text-align: center; padding: 2px 0; font-size: 13px; padding-left:20px">{{this.quantity}} PCS</td>
+                <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency (finalPrice this.price this.discount this.taxRate)}}</td>
+                <td style="text-align: center; padding: 2px 0; font-size: 13px; padding-left:20px">{{this.quantity}}</td>
+                <td style="padding: 2px 0; font-size: 13px; padding-left:20px">{{formatCurrency (multiply this.specialDiscount this.quantity)}}</td>
                 <td style="text-align: right; padding: 2px 0; font-size: 13px;">{{formatCurrency this.subtotal}}</td>
             </tr>
             {{/each}}
