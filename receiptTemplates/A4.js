@@ -387,10 +387,22 @@ const template = Handlebars.compile(`
         <span>Discount:</span>
         <span>{{formatCurrency newSale.discount}}</span>
     </div>
-     <div class="summary-row">
+    {{#if (eq newSale.paymentStatus "unpaid")}}
+    <div class="summary-row">
+        <span>Paid Amount : 0.00</span>
+    </div>
+    {{/if}}
+    {{#if (eq newSale.paymentStatus "unpaid")}}
+    <div class="summary-row">
+        <span>Due Amount :</span>
+        <span>{{formatCurrency newSale.grandTotal}}</span>
+    </div>
+    {{else}}
+    <div class="summary-row">
         <span>Balance :</span>
         <span>{{formatCurrency newSale.cashBalance}}</span>
     </div>
+    {{/if}}
 
     {{#each newSale.paymentType}}
     <tr style="text-align: right; padding: 2px 0; font-size: 12px;">
