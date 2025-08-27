@@ -34,7 +34,7 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
   const d = parseFloat(discount) || 0;
   const t = parseFloat(taxRate) || 0;
 
-  const finalPrice = p - d + (p * t);
+  const finalPrice = p - d + p * t;
   return finalPrice.toFixed(2);
 });
 
@@ -161,16 +161,28 @@ const template = Handlebars.compile(`
     <tr><td colspan="4" style="padding-top: 8px;"></td></tr>
     <tr>
 </tr>
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Total:</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
+    </tr>
 
-        <tr>
-            <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Total:</td>
-            <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
-        </tr>
     <tr>
         <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Discount:</td>
         <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.discount}}</td>
     </tr>
     
+    {{#if (eq newSale.paymentStatus "unpaid")}}
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Paid :</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">0.00</td>
+    </tr>
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Due :</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
+    </tr>
+    {{/if}}
+    
+    {{#unless (eq newSale.paymentStatus "unpaid")}}
     <!-- Payment Details Rows -->
     {{#each newSale.paymentType}}
     <tr>
@@ -183,13 +195,12 @@ const template = Handlebars.compile(`
   </td>
         <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency this.amount}}</td>
     </tr>
-    
     {{/each}}
-        
-            <tr>
-                <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Balance:</td>
-                <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency (abs newSale.cashBalance)}}</td>
-            </tr>
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Balance:</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency (abs newSale.cashBalance)}}</td>
+    </tr>
+    {{/unless}}
         </tfoot>
     </table>
 

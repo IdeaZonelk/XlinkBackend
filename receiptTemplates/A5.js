@@ -35,7 +35,7 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
   const d = parseFloat(discount) || 0;
   const t = parseFloat(taxRate) || 0;
 
-  const finalPrice = p - d + (p * t);
+  const finalPrice = p - d + p * t;
   return finalPrice.toFixed(2);
 });
 
@@ -66,8 +66,8 @@ Handlebars.registerHelper("formatMobile", function (mobileNumber) {
 });
 
 Handlebars.registerHelper("multiply", function (a, b) {
-    if (isNaN(a) || isNaN(b)) return "0.00";
-    return (a * b).toFixed(2);
+  if (isNaN(a) || isNaN(b)) return "0.00";
+  return (a * b).toFixed(2);
 });
 
 const formatDate = (date) => {
@@ -381,9 +381,19 @@ const template = Handlebars.compile(`
     {{/if}}:</b> {{formatCurrency this.amount}}
                         </div>
                         {{/each}}
-                        <div class="payment-item">
-                            <b>Total Paid</b> {{formatCurrency newSale.grandTotal}}
-                        </div>
+                            {{#if (eq newSale.paymentStatus "unpaid")}}
+                            <div class="payment-item">
+                                <b>Paid Amount :</b> 0.00
+                            </div>
+                            <div class="payment-item">
+                                <b>Due Amount :</b> {{formatCurrency newSale.grandTotal}}<br>
+                                <span>(+shipping,tax)</span>
+                            </div>
+                            {{else}}
+                            <div class="payment-item">
+                                <b>Total Paid :</b> {{formatCurrency newSale.grandTotal}}
+                            </div>
+                            {{/if}}
                     </div>
 
                     <div class="payment-right">
@@ -393,7 +403,7 @@ const template = Handlebars.compile(`
                             <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
                         </div>
                         <div class="summary-row">
-                            <span><b>Discount</b></span>
+                            <span><b>Discount:</b></span>
                             <span>(-) Rs {{formatCurrency newSale.discount}}</span>
                         </div>
                         <div class="summary-row total">

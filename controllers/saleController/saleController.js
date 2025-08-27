@@ -376,6 +376,7 @@ const createSale = async (req, res) => {
                 totalPcs: newSale.totalPcs || 0,
                 discount: newSale.discountValue || 0,
                 cashBalance: newSale.cashBalance || 0,
+                paymentStatus: newSale.paymentStatus || saleData.paymentStatus || '',
                 paymentType: saleData.paymentType.map(payment => ({
                     type: payment.type || 'Unknown',
                     amount: payment.amount || 0,
