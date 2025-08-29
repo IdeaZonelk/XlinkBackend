@@ -302,7 +302,7 @@ const template = Handlebars.compile(`
                     <div class="meta-left">
                         <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
                         <div class="meta-item"><b>Customer</b></div>
-                        <div class="meta-item">{{newSale.customer}}</div>
+                        <div class="meta-item">{{newSale.customerName}}</div>
                         <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
                     </div>
 

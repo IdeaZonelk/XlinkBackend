@@ -107,7 +107,7 @@ const template = Handlebars.compile(`
                 <p style="margin: 3px 0; font-size: 12px;">Salesman: {{newSale.cashierUsername}}</p>
                 <p style="margin: 3px 0; font-size: 12px;">Receipt No: {{newSale.invoiceNumber}}</p>
                 <p style="margin: 3px 0; font-size: 12px;">Date: {{newSale.date}}</p>
-                <p style="margin: 3px 0; font-size: 12px;">Customer: {{newSale.customer}}</p>
+                <p style="margin: 3px 0; font-size: 12px;">Customer: {{newSale.customerName}}</p>
             </div>
 
         <!-- Products Table -->

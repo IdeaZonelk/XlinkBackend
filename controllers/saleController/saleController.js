@@ -417,6 +417,7 @@ const createSale = async (req, res) => {
                 invoiceNumber: newSale.invoiceNumber || '',
                 date: formatDate(newSale.date),
                 customer: receiptSettings.customer ? (newSale.customer || '') : '',
+                customerName: newSale.customerName || '',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
                     price: product.applicablePrice || 0,
