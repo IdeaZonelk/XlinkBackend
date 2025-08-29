@@ -301,8 +301,7 @@ const template = Handlebars.compile(`
                     <!-- Left: Invoice Meta Data -->
                     <div class="meta-left">
                         <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
-                        <div class="meta-item"><b>Customer</b></div>
-                        <div class="meta-item">{{newSale.customerName}}</div>
+                        <div class="meta-item"><b>Customer:</b> {{newSale.customerName}}</div>
                         <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
                     </div>
 
@@ -358,6 +357,18 @@ const template = Handlebars.compile(`
                             <span><b>Subtotal:</b></span>
                             <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
                         </div>
+                          {{#if newSale.claimedPoints}}
+        <div class="summary-row">
+            <span><b>Claimed Points:</b></span>
+            <span>(-) Rs {{formatCurrency newSale.claimedPoints}}</span>
+        </div>
+        {{/if}}
+        {{#if newSale.redeemedPointsFromSale}}
+        <div class="summary-row">
+            <span><b>Redeemed Points:</b></span>
+            <span>(+) Rs {{formatCurrency newSale.redeemedPointsFromSale}}</span>
+        </div>
+        {{/if}}
                         <div class="summary-row">
                             <span><b>Discount</b></span>
                             <span>(-) Rs {{formatCurrency newSale.discount}}</span>

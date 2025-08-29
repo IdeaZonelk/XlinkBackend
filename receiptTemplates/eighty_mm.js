@@ -152,11 +152,11 @@ const template = Handlebars.compile(`
     </tr>
     <tr>
         <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Claimed Points:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{newSale.claimedPoints}}</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.claimedPoints}}</td>
     </tr>
     <tr>
         <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Redeemed Points From Sale:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{newSale.redeemedPointsFromSale}}</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.redeemedPointsFromSale}}</td>
     </tr>
     <!-- Payment Details Rows -->
     {{#each newSale.paymentType}}
