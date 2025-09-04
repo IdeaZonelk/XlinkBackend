@@ -435,7 +435,13 @@ const createSale = async (req, res) => {
           type: payment.type || "Unknown",
           amount: payment.amount || 0,
         })),
-        note: receiptSettings.note ? newSale.note || "" : "",
+        note: receiptSettings.note
+          ? newSale.note &&
+            newSale.note !== "null" &&
+            newSale.note.trim() !== ""
+            ? newSale.note
+            : ""
+          : "",
         totalSavedAmount: receiptSettings.taxDiscountShipping
           ? totalSavedAmount +
               newSale.discountValue +
@@ -731,7 +737,13 @@ const createNonPosSale = async (req, res) => {
           type: payment.type || "Unknown",
           amount: payment.amount || 0,
         })),
-        note: receiptSettings.note ? newSale.note || "" : "",
+        note: receiptSettings.note
+          ? newSale.note &&
+            newSale.note !== "null" &&
+            newSale.note.trim() !== ""
+            ? newSale.note
+            : ""
+          : "",
         totalSavedAmount: receiptSettings.taxDiscountShipping
           ? totalSavedAmount +
               newSale.discountValue +
@@ -770,13 +782,11 @@ const createNonPosSale = async (req, res) => {
     });
   } catch (error) {
     console.error("Error saving Non-POS sale:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error saving Non-POS sale",
-        error: error.message,
-        status: "unsuccess",
-      });
+    res.status(500).json({
+      message: "Error saving Non-POS sale",
+      error: error.message,
+      status: "unsuccess",
+    });
   }
 };
 
@@ -1776,12 +1786,10 @@ const fetchLastWeekSales = async (req, res) => {
     res.status(200).json(salesWithUpdatedProducts);
   } catch (error) {
     console.error("❌ Error fetching last week's sales:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error fetching last week's sales",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error fetching last week's sales",
+      error: error.message,
+    });
   }
 };
 
@@ -1882,12 +1890,10 @@ const fetchLastMonthSales = async (req, res) => {
     res.status(200).json(salesWithUpdatedProducts);
   } catch (error) {
     console.error("❌ Error fetching last month's sales:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error fetching last month's sales",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error fetching last month's sales",
+      error: error.message,
+    });
   }
 };
 
@@ -1989,12 +1995,10 @@ const fetchLastYearSales = async (req, res) => {
     res.status(200).json(salesWithUpdatedProducts);
   } catch (error) {
     console.error("❌ Error fetching last year's sales:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error fetching last year's sales",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error fetching last year's sales",
+      error: error.message,
+    });
   }
 };
 
@@ -2039,7 +2043,10 @@ const printInvoice = async (req, res) => {
         discount: sale.discountValue || 0,
         cashBalance: sale.cashBalance || 0,
         paymentType: sale.paymentType,
-        note: sale.note || "",
+        note:
+          sale.note && sale.note !== "null" && sale.note.trim() !== ""
+            ? sale.note
+            : "",
       },
     };
 
@@ -2367,7 +2374,13 @@ const printInvoice = async (req, res) => {
         </div>`;
 
     Handlebars.registerHelper("isValidNote", function (note, options) {
-      return note && note !== "null" ? options.fn(this) : options.inverse(this);
+      // Check if note is valid (not null, undefined, "null", or empty/whitespace only)
+      return note &&
+        note !== null &&
+        note !== "null" &&
+        note.toString().trim() !== ""
+        ? options.fn(this)
+        : options.inverse(this);
     });
 
     const compiledTemplate = Handlebars.compile(invoiceTemplate); //  reuse the same template string
