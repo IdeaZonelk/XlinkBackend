@@ -22,7 +22,6 @@ const ZReading = require('../../models/zBillRecord');
 const mongoose = require('mongoose');
 const { log } = require('console');
 
-// Create registry
 const cashHandIn = async (req, res) => {
     const { cashAmount, username, name, openTime,
         oneRupee, twoRupee, fiveRupee, tenRupee, twentyRupee, fiftyRupee, hundredRupee, fiveHundredRupee, thousandRupee, fiveThousandRupee } = req.body;
@@ -63,7 +62,6 @@ const cashHandIn = async (req, res) => {
     }
 };
 
-//Close registry
 const closeRegister = async (req, res) => {
     const { id } = req.params;
     try {
@@ -249,9 +247,6 @@ const generateReferenceNo = async (req, res) => {
     }
 };
 
-
-
-// Held products
 const holdProducts = async (req, res) => {
     const { referenceNo, products } = req.body; // Extracting data from the request body
 
@@ -278,8 +273,6 @@ const holdProducts = async (req, res) => {
     }
 };
 
-
-// Get all held products
 const viewAllHeldProducts = async (req, res) => {
     try {
         const heldProducts = await HeldProducts.find();
@@ -349,7 +342,6 @@ const viewAllHeldProducts = async (req, res) => {
     }
 };
 
-// Delete a held product
 const deleteHeldProduct = async (req, res) => {
     const { id } = req.params;
 
@@ -383,8 +375,6 @@ const deleteHeldProduct = async (req, res) => {
     }
 };
 
-
-// Get products by ID
 const getProductsByIds = async (req, res) => {
     const { ids } = req.body;
     try {
@@ -424,7 +414,6 @@ const getProductsByIds = async (req, res) => {
     }
 };
 
-// Update product quantities
 const updateProductQuantities = async (req, res) => {
     const productDetails = req.body.products;
 
@@ -509,7 +498,6 @@ const updateProductQuantities = async (req, res) => {
     }
 };
 
-
 const findProducts = async (req, res) => {
     try {
         const { warehouse, brand, category, keyword } = req.query; // Extract filters from query params
@@ -582,7 +570,6 @@ const findProducts = async (req, res) => {
     }
 };
 
-
 const getAdminPasswordForDiscount = async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -632,97 +619,111 @@ const getAdminPasswordForDiscount = async (req, res) => {
 
 const saveZReading = async (req, res) => {
     try {
-        const { cardPaymentAmount, cashPaymentAmount, bankTransferPaymentAmount, totalDiscountAmount, inputs, registerData, cashVariance } = req.body;
+        const records = Array.isArray(req.body) ? req.body : [req.body];
 
-        // Validate required arrays
-        if (!Array.isArray(inputs) || !Array.isArray(registerData)) {
+        if (records.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Inputs and registerData must be arrays'
+                message: 'No records provided in request body'
+            });
+        }
+        const validRegisters = [];
+        const failedRecords = [];
+
+        for (const [index, record] of records.entries()) {
+            const requiredFields = ['cashRegisterID', 'cashierName', 'openedTime', 'totalAmount', 'grandTotal', 'closedTime'];
+            const missingFields = requiredFields.filter(field =>
+                record[field] === undefined || record[field] === null || record[field] === ''
+            );
+
+            if (missingFields.length > 0) {
+                failedRecords.push({
+                    index,
+                    message: `Missing required fields: ${missingFields.join(', ')}`
+                });
+                continue;
+            }
+
+            const sanitizedInputs = (Array.isArray(record.inputs) ? record.inputs : []).map(input => ({
+                denomination: Number(input.denomination) || 0,
+                quantity: Number(input.quantity) || 0,
+                amount: Number(input.amount) || 0
+            }));
+
+            validRegisters.push({
+                cashRegisterID: record.cashRegisterID,
+                cashierName: record.cashierName,
+                openedTime: record.openedTime,
+                inputs: sanitizedInputs,
+                cardPaymentAmount: Number(record.cardPaymentAmount) || 0,
+                cashPaymentAmount: Number(record.cashPaymentAmount) || 0,
+                bankTransferPaymentAmount: Number(record.bankTransferPaymentAmount) || 0,
+                totalDiscountAmount: Number(record.totalDiscountAmount) || 0,
+                totalProfitAmount: Number(record.totalProfitAmount) || 0,
+                totalAmount: Number(record.totalAmount),
+                grandTotal: Number(record.grandTotal),
+                cashHandIn: Number(record.cashHandIn) || 0,
+                cashVariance: Number(record.cashVariance) || 0,
+                closedTime: record.closedTime
             });
         }
 
-        const newZReading = new ZReading({
-            cardPaymentAmount: cardPaymentAmount || 0,
-            cashPaymentAmount: cashPaymentAmount || 0,
-            bankTransferPaymentAmount: bankTransferPaymentAmount || 0,
-            totalDiscountAmount: totalDiscountAmount || 0,
-            inputs: inputs.map(input => ({
-                denomination: input.denomination,
-                quantity: input.quantity,
-                amount: input.amount
-            })),
-            registerData: registerData[0] || {},
-            cashVariance: cashVariance || 0
-        });
+        if (validRegisters.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid records to save',
+                failedRecords
+            });
+        }
 
-        const savedZReading = await newZReading.save();
+        const zReadingDoc = new ZReading({ registers: validRegisters });
+        const savedDoc = await zReadingDoc.save();
 
-        res.status(201).json({
+        const statusCode = failedRecords.length === 0 ? 201 : 207;
+
+        return res.status(statusCode).json({
             success: true,
-            data: savedZReading,
-            message: 'Z-reading saved successfully'
+            savedCount: validRegisters.length,
+            failedCount: failedRecords.length,
+            savedDoc,
+            failedRecords,
+            message: failedRecords.length === 0
+                ? 'All registers saved in one ZReading document. Zrecords cleared.'
+                : 'Partial save: some records failed. Zrecords not cleared.'
         });
 
     } catch (error) {
-        console.error('Error saving Z-reading:', error);
-        res.status(500).json({
+        console.error('Z-reading save error:', error);
+        return res.status(500).json({
             success: false,
-            message: 'Server error',
-            error: error.message
+            message: 'Server error while saving Z-reading document',
+            errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
 
 const getAllZReadingDetails = async (req, res) => {
     try {
-        console.log("Received query parameters:", req.query);
-
-        // Extract page and size from nested object
-        const page = parseInt(req.query.page?.number, 10) || 1;
-        const size = parseInt(req.query.page?.size, 10) || 10;
-
-        console.log(`Parsed values -> Page: ${page}, Size: ${size}`);
-
-        const offset = (page - 1) * size;
-
-        // Fetch paginated data
-        const zReadingDetails = await ZReading.find().skip(offset).limit(size);
-        const totalZReadings = await ZReading.countDocuments();
-
-        console.log(`Total Records: ${totalZReadings}, Records Returned: ${zReadingDetails.length}`);
-
-        if (!zReadingDetails.length) {
-            return res.status(404).json({
-                success: false,
-                message: 'No Z-readings found'
-            });
-        }
+        const zReadings = await ZReading.find().sort({ createdAt: -1 });
 
         res.status(200).json({
             success: true,
-            data: zReadingDetails,
-            currentPage: page,
-            totalPages: Math.ceil(totalZReadings / size),
-            totalItems: totalZReadings,
-            message: 'Z-reading details retrieved successfully'
+            count: zReadings.length,
+            data: zReadings
         });
-
     } catch (error) {
-        console.error('Error retrieving Z-reading details:', error);
+        console.error('Error fetching ZReadings:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error',
-            error: error.message
+            message: 'Failed to fetch ZReadings',
+            errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
 
-
 const getAllZReadingByDate = async (req, res) => {
     try {
         const { date } = req.query;
-
         if (!date) {
             return res.status(400).json({
                 success: false,
@@ -740,7 +741,6 @@ const getAllZReadingByDate = async (req, res) => {
                 $lt: endDate
             }
         };
-
         const zReadingDetails = await ZReading.find(query);
 
         if (!zReadingDetails.length) {
@@ -769,7 +769,6 @@ const getAllZReadingByDate = async (req, res) => {
 const deleteZReading = async (req, res) => {
     try {
         const { id } = req.params;
-
         const zReading = await ZReading.findByIdAndDelete(id);
 
         if (!zReading) {
@@ -778,12 +777,7 @@ const deleteZReading = async (req, res) => {
                 message: 'Z-reading not found'
             });
         }
-
-        res.status(200).json({
-            success: true,
-            message: 'Z-reading deleted successfully'
-        });
-
+        res.status(200).json({ success: true, message: 'Z-reading deleted successfully' });
     } catch (error) {
         console.error('Error deleting Z-reading:', error);
         res.status(500).json({

@@ -17,7 +17,7 @@ const fs = require('fs');
 const createProduct = async (req, res) => {
     try {
         let image = null;
-        const { name, code, brand, category, barcode, unit, saleUnit, purchase, ptype, status, quantityLimit, supplier, variation, warehouse, note } = req.body;
+        const { name, code, brand, category, barcode, unit, saleUnit, purchase, ptype, status, quantityLimit, supplier, warranty, variation, warehouse, note } = req.body;
         let { variationValues } = req.body;
 
         if (req.file) {
@@ -114,6 +114,7 @@ const createProduct = async (req, res) => {
             status: status || 'Received',
             quantityLimit,
             supplier,
+            warranty: warranty || '',
             warehouse: warehouseData,
             variation,
             note
@@ -342,6 +343,7 @@ const updateProduct = async (req, res) => {
                     status: updatedProduct.status || 'Received',
                     quantityLimit: quantityLimit,
                     supplier: updatedProduct.supplier,
+                    warranty: updatedProduct.warranty || '', // Add warranty field
                     warehouse: warehouseData,
                     variation: updatedProduct.variation,
                     note: updatedProduct.note
@@ -634,6 +636,7 @@ const findProductForUpdate = async (req, res) => {
                 status: productObj.status,
                 quantityLimit: productObj.quantityLimit,
                 supplier: productObj.supplier, // Fixed typo
+                warranty: productObj.warranty || '', // Add warranty field
                 warehouse: formattedWarehouse, // Ensuring it's properly formatted
                 variation: productObj.variation,
                 variationType: productObj.variationType || null,

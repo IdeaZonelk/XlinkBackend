@@ -94,6 +94,7 @@ router.get('/findQuatationById/:id', quatationController.findQuatationById);
 
 //sale routes
 router.get('/getReportData/:warehouse',reportController.getReportData);
+router.get('/getZReportData/:cashRegisterID', reportController.getZReportData)
 router.get('/getTodayReportData/:warehouse', reportController.getTodayReportData);
 router.get('/getLastWeekReportData/:warehouse', reportController.getLastWeekReportData);
 router.get('/getLastMonthReportData/:warehouse', reportController.getLastMonthReportData);
