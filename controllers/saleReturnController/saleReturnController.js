@@ -223,6 +223,7 @@ const findSaleReturnById = async (req, res) => {
             _id: saleReturn._id,
             date: saleReturn.date,
             customer: saleReturn.customer,
+            customerName: saleReturn.customerName || "Unknown",
             warehouse: saleReturn.warehouse,
             grandTotal: saleReturn.grandTotal,
             paidAmount: saleReturn.paidAmount,

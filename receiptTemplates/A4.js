@@ -342,7 +342,7 @@ const template = Handlebars.compile(`
         <!-- Customer Details -->
         <div class="customer-details" style="display:flex; justify-content:space-between;margin-left: 5px; margin-right: 5px">
             <p style="font-size: 14px; margin:0; padding-bottom:1px;">{{newSale.date}}</p>
-            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customer}}</p>
+            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customerName}}</p>
         </div>
 
         <div class="divider"></div>
@@ -387,6 +387,20 @@ const template = Handlebars.compile(`
         <span>Discount:</span>
         <span>{{formatCurrency newSale.discount}}</span>
     </div>
+     {{#if newSale.claimedPoints}}
+    <div class="summary-row">
+        <span>Claimed Points:</span>
+        <span>{{formatCurrency newSale.claimedPoints}}</span>
+    </div>
+    {{/if}}
+    
+    {{#if newSale.redeemedPointsFromSale}}
+    <div class="summary-row">
+        <span>Redeemed Points:</span>
+        <span>{{formatCurrency newSale.redeemedPointsFromSale}}</span>
+    </div>
+    {{/if}}
+     <div class="summary-row">
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <div class="summary-row">
         <span>Paid Amount : 0.00</span>

@@ -30,6 +30,8 @@ const productSchema = new mongoose.Schema({
 
 const quatationSchema = new mongoose.Schema({
     customer: { type: String, required: true },
+    customerName: { type: String, required: true },
+    redeemedPoints: { type: Number, default: 0 },
     date: { type: Date, default: Date.now },
     discountType:{ type: String},
     discount: { type: String},

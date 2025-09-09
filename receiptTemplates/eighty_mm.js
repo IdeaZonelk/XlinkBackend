@@ -122,7 +122,7 @@ const template = Handlebars.compile(`
                 <p style="margin: 3px 0; font-size: 12px;">Salesman: {{newSale.cashierUsername}}</p>
                 <p style="margin: 3px 0; font-size: 12px;">Receipt No: {{newSale.invoiceNumber}}</p>
                 <p style="margin: 3px 0; font-size: 12px;">Date: {{newSale.date}}</p>
-                <p style="margin: 3px 0; font-size: 12px;">Customer: {{newSale.customer}}</p>
+                <p style="margin: 3px 0; font-size: 12px;">Customer: {{newSale.customerName}}</p>
             </div>
 
         <!-- Products Table -->
@@ -170,7 +170,16 @@ const template = Handlebars.compile(`
         <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Discount:</td>
         <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.discount}}</td>
     </tr>
-    
+
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Claimed Points:</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.claimedPoints}}</td>
+    </tr>
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Redeemed Points From Sale:</td>
+        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.redeemedPointsFromSale}}</td>
+    </tr>
+
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <tr>
         <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Paid :</td>

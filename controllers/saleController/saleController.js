@@ -9,31 +9,23 @@
  * Contact info@ideazone.lk for more information.
  */
 
-const Sale = require("../../models/saleModel");
-const SalePayment = require("../../models/salePaymentModel");
-const Product = require("../../models/products/product");
-const Settings = require("../../models/settingsModel");
-const SaleReturn = require("../../models/saleReturnModel");
-const Cash = require("../../models/posModel/cashModel");
-const mongoose = require("mongoose");
-const { isEmpty } = require("lodash");
-const Quatation = require("../../models/quatationModel");
-const generateReferenceId = require("../../utils/generateReferenceID");
-const io = require("../../server");
-const Handlebars = require("handlebars");
-const receiptSettingsSchema = require("../../models/receiptSettingsModel");
-const {
-  generateReceiptEighty,
-  getBarcodeScriptEighty,
-} = require("../../receiptTemplates/eighty_mm");
-const {
-  generateReceiptA5,
-  getBarcodeScriptA5,
-} = require("../../receiptTemplates/A5");
-const {
-  generateReceiptA4,
-  getBarcodeScriptA4,
-} = require("../../receiptTemplates/A4");
+const Sale = require('../../models/saleModel')
+const SalePayment = require('../../models/salePaymentModel')
+const Product = require('../../models/products/product');
+const Settings = require('../../models/settingsModel')
+const SaleReturn = require('../../models/saleReturnModel')
+const Cash = require('../../models/posModel/cashModel');
+const Customers = require('../../models/customerModel');
+const mongoose = require('mongoose');
+const { isEmpty } = require('lodash');
+const Quatation = require('../../models/quatationModel');
+const generateReferenceId = require('../../utils/generateReferenceID');
+const io = require('../../server');
+const Handlebars = require('handlebars');
+const receiptSettingsSchema = require('../../models/receiptSettingsModel');
+const { generateReceiptEighty, getBarcodeScriptEighty } = require('../../receiptTemplates/eighty_mm');
+const { generateReceiptA5, getBarcodeScriptA5 } = require('../../receiptTemplates/A5');
+const { generateReceiptA4, getBarcodeScriptA4 } = require('../../receiptTemplates/A4');
 
 const formatDate = (date) => {
   if (!date) return "";
@@ -74,6 +66,9 @@ const createSale = async (req, res) => {
     if (!receiptSettings) {
       throw new Error("Receipt settings not found");
     }
+
+    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
 
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
@@ -140,6 +135,7 @@ const createSale = async (req, res) => {
         status: "unsuccess",
       });
     }
+
     const newSale = new Sale(saleData);
     const productsData = saleData.productsData;
 
@@ -175,7 +171,7 @@ const createSale = async (req, res) => {
         );
       }
 
-      // Check if product has batches
+      // Products with batches
       if (updatedProduct.hasBatches) {
         if (!batchNumber) {
           throw new Error(
@@ -183,7 +179,6 @@ const createSale = async (req, res) => {
           );
         }
 
-        // Find the specific batch
         const batch = warehouseData.batches.find(
           (b) => b.batchNumber === batchNumber
         );
@@ -193,7 +188,6 @@ const createSale = async (req, res) => {
           );
         }
 
-        // Handle products with variations
         if (ptype === "Variation") {
           if (!variationValue) {
             throw new Error(
@@ -226,10 +220,7 @@ const createSale = async (req, res) => {
             }
             variation.productQty -= quantity;
           }
-        }
-        // Handle products without variations
-        else if (ptype === "Single") {
-          // Handle weight-based single products with batches
+        } else if (ptype === "Single") {
           if (isWeight) {
             const currentWeight = Number(batch.totalProductWeight) || 0;
             const weightToDeduct = Number(quantity) || 0;
@@ -241,9 +232,7 @@ const createSale = async (req, res) => {
             }
 
             batch.totalProductWeight = currentWeight - weightToDeduct;
-          }
-          // Handle quantity-based single products with batches
-          else {
+          } else {
             if (batch.productQty < quantity) {
               throw new Error(
                 `Insufficient quantity in batch ${batchNumber} of product ${updatedProduct.name}`
@@ -257,10 +246,8 @@ const createSale = async (req, res) => {
           );
         }
       }
-
-      // Handle products without batches
+      // Products without batches
       else {
-        // Handle products with variations
         if (ptype === "Variation") {
           if (!variationValue) {
             throw new Error(
@@ -275,7 +262,6 @@ const createSale = async (req, res) => {
             );
           }
 
-          // For weighted products with variations
           if (isWeight) {
             const currentWeight = Number(variation.totalProductWeight) || 0;
             const weightToDeduct = Number(quantity) || 0;
@@ -295,9 +281,7 @@ const createSale = async (req, res) => {
             }
 
             variation.totalProductWeight = currentWeight - weightToDeduct;
-          }
-          // For non-weighted products with variations
-          else {
+          } else {
             if (variation.productQty < quantity) {
               throw new Error(
                 `Insufficient quantity for variation ${variationValue} of product ${updatedProduct.name}`
@@ -307,10 +291,7 @@ const createSale = async (req, res) => {
           }
 
           warehouseData.variationValues.set(variationValue, variation);
-        }
-        // Handle Single products without batches (unchanged from your existing code)
-        else if (ptype === "Single") {
-          // For weight-based single products without batches
+        } else if (ptype === "Single") {
           if (isWeight) {
             const currentWeight = Number(warehouseData.totalProductWeight) || 0;
             const weightToDeduct = Number(quantity) || 0;
@@ -332,7 +313,7 @@ const createSale = async (req, res) => {
           } else {
             if (warehouseData.productQty < quantity) {
               throw new Error(
-                `Insufficient quantity of product ${updatedProduct.name}`
+                `Insufficient quantity of product ${updatedProduct.name} in warehouse ${warehouse}`
               );
             }
             warehouseData.productQty -= quantity;
@@ -344,15 +325,19 @@ const createSale = async (req, res) => {
         }
       }
 
-      // Save the updated product
+      // Save the updated product state
       updatedProduct.warehouse.set(warehouse, warehouseData);
       await updatedProduct.save();
       return updatedProduct;
     });
 
+    // Apply product updates
     await Promise.all(updatePromises);
+
+    // Save the sale
     await newSale.save();
 
+    // If partial payment, insert payment records
     try {
       if (newSale.paymentStatus === "partial" && newSale.paidAmount > 0) {
         const paymentsToInsert = newSale.paymentType.map((payment) => ({
@@ -368,9 +353,70 @@ const createSale = async (req, res) => {
       console.error("Error creating initial payment record:", paymentErr);
     }
 
+    // Update customer loyalty points (if applicable)
+    try {
+      const claimedPoints = saleData.claimedPoints || 0;
+      const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
+
+      if (claimedPoints > 0 || redeemedPointsFromSale > 0) {
+        if (saleData.customer && saleData.customer !== "Unknown") {
+          let customer;
+
+          // Find by ID if valid ObjectId, otherwise by name
+          if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
+            customer = await Customers.findById(saleData.customer);
+          }
+          if (!customer) {
+            customer = await Customers.findOne({ name: saleData.customer });
+          }
+
+          if (customer) {
+            if (!customer.loyalty) {
+              customer.loyalty = {
+                loyaltyReferenceNumber: `CUST-${customer._id
+                  .toString()
+                  .slice(-6)}`,
+                redeemedPoints: 0,
+              };
+            }
+
+            const currentRedeemedPoints =
+              Number(customer.loyalty.redeemedPoints) || 0;
+
+            if (claimedPoints > currentRedeemedPoints) {
+              console.warn(
+                `Claimed points (${claimedPoints}) exceed available points (${currentRedeemedPoints}) for customer ${customer.name}`
+              );
+            }
+
+            const newRedeemedPoints = Math.max(
+              0,
+              currentRedeemedPoints - claimedPoints
+            ) + redeemedPointsFromSale;
+
+            customer.loyalty.redeemedPoints = newRedeemedPoints;
+            await customer.save();
+
+            console.log(
+              `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints}`
+            );
+          } else {
+            console.warn(`Customer ${saleData.customer} not found for points update`);
+          }
+        }
+      }
+    } catch (pointsError) {
+      console.error("Error updating customer loyalty points:", pointsError);
+    }
+
+    // Update cash register
     const { paidAmount } = saleData;
-    cashRegister.totalBalance += parseFloat(paidAmount);
-    await cashRegister.save();
+    try {
+      cashRegister.totalBalance += parseFloat(paidAmount || 0);
+      await cashRegister.save();
+    } catch (cashErr) {
+      console.error("Error updating cash register:", cashErr);
+    }
 
     // Generate receipt HTML
     const baseUrl = `${req.protocol}://${req.get("host")}`;
@@ -378,7 +424,6 @@ const createSale = async (req, res) => {
       ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
       : null;
 
-    // Date formatting helper
     const formatDate = (date) => {
       if (!date) return "";
       const d = new Date(date);
@@ -396,7 +441,7 @@ const createSale = async (req, res) => {
         product.price && product.ourPrice && product.price > product.ourPrice
           ? (product.price - product.ourPrice) * product.quantity
           : 0;
-      return sum + saved + product.specialDiscount;
+      return sum + saved + (product.specialDiscount || 0);
     }, 0);
 
     const templateData = {
@@ -415,6 +460,7 @@ const createSale = async (req, res) => {
         invoiceNumber: newSale.invoiceNumber || "",
         date: formatDate(newSale.date),
         customer: receiptSettings.customer ? newSale.customer || "" : "",
+        customerName: newSale.customerName || "",
         productsData: saleData.productsData.map((product) => ({
           name: product.name || "Unnamed Product",
           price: product.applicablePrice || 0,
@@ -435,22 +481,24 @@ const createSale = async (req, res) => {
           type: payment.type || "Unknown",
           amount: payment.amount || 0,
         })),
-        note: receiptSettings.note
-          ? newSale.note &&
-            newSale.note !== "null" &&
-            newSale.note.trim() !== ""
+        note:
+          receiptSettings.note && newSale.note && newSale.note !== "null"
             ? newSale.note
-            : ""
-          : "",
+            : "",
         totalSavedAmount: receiptSettings.taxDiscountShipping
           ? totalSavedAmount +
-              newSale.discountValue +
-              newSale.offerValue -
-              newSale.taxValue || 0
+            (newSale.discountValue || 0) +
+            (newSale.offerValue || 0) -
+            (newSale.taxValue || 0)
           : undefined,
         barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+        claimedPoints: newSale.claimedPoints || 0,
+        redeemedPointsFromSale: newSale.redeemedPointsFromSale || 0,
       },
     };
+
+    let html = "";
+    let barcodeScript = "";
 
     switch (newSale.receiptSize || receiptSettings.template) {
       case "80mm":
@@ -466,9 +514,7 @@ const createSale = async (req, res) => {
         barcodeScript = getBarcodeScriptA4();
         break;
       default:
-        throw new Error(
-          `Unknown receipt template: ${receiptSettings.template}`
-        );
+        throw new Error(`Unknown receipt template: ${receiptSettings.template}`);
     }
     const fullHtml = barcodeScript + html;
 
@@ -488,6 +534,7 @@ const createSale = async (req, res) => {
   }
 };
 
+
 const createNonPosSale = async (req, res) => {
   try {
     const saleData = req.body;
@@ -501,6 +548,10 @@ const createNonPosSale = async (req, res) => {
         .padStart(3, "0");
       saleData.invoiceNumber = `INV-${timestamp}-${random}`;
     }
+
+
+        saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+        saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
 
     // Fetch receipt settings for receipt generation
     const receiptSettings = await receiptSettingsSchema.findOne();
@@ -647,9 +698,7 @@ const createNonPosSale = async (req, res) => {
         });
       }
 
-      // Update the warehouse map with the modified data
-      updatedProduct.warehouse.set(warehouse, warehouseData);
-
+     updatedProduct.warehouse.set(warehouse, warehouseData);
       await updatedProduct.save({ validateModifiedOnly: true });
       return updatedProduct;
     });
@@ -657,6 +706,42 @@ const createNonPosSale = async (req, res) => {
     await Promise.all(updatePromises);
     await newSale.save();
 
+    /** Loyalty points update **/
+    try {
+      const claimedPoints = saleData.claimedPoints || 0;
+      const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
+
+      if ((claimedPoints > 0 || redeemedPointsFromSale > 0) && saleData.customer && saleData.customer !== "Unknown") {
+        let customer;
+        if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
+          customer = await Customers.findById(saleData.customer);
+        }
+        if (!customer) {
+          customer = await Customers.findOne({ name: saleData.customer });
+        }
+
+        if (customer) {
+          if (!customer.loyalty) {
+            customer.loyalty = {
+              loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+              redeemedPoints: 0,
+            };
+          }
+
+          const currentRedeemedPoints = Number(customer.loyalty.redeemedPoints) || 0;
+          if (claimedPoints > currentRedeemedPoints) {
+            console.warn(`Claimed points exceed available for ${customer.name}`);
+          }
+
+          customer.loyalty.redeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + redeemedPointsFromSale;
+          await customer.save();
+        }
+      }
+    } catch (pointsError) {
+      console.error("Error updating customer loyalty points:", pointsError);
+    }
+
+    /** Payment records update **/
     try {
       if (newSale.paymentStatus === "partial" && newSale.paidAmount > 0) {
         const paymentsToInsert = newSale.paymentType.map((payment) => ({
@@ -670,7 +755,7 @@ const createNonPosSale = async (req, res) => {
       }
     } catch (paymentErr) {
       console.error("Error creating initial payment record:", paymentErr);
-      // Optionally log or continue
+    }
     }
 
     // Generate receipt HTML

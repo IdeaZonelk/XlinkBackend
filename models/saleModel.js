@@ -41,8 +41,9 @@ const creditDetailsSchema = new mongoose.Schema({
 });
 
 const saleSchema = new mongoose.Schema({
-    refferenceId: { type: String, required: true, unique: true },
-    customer: { type: String },
+    refferenceId : { type: String, required: true, unique: true }, 
+    customer: { type: String},
+    customerName: { type: String},
     date: { type: Date, default: Date.now },
     discountType: { type: String },
     discount: { type: String },
@@ -71,6 +72,8 @@ const saleSchema = new mongoose.Schema({
         default: "unknown"
     },
     saleType: { type: String, enum: ['POS', 'Non-POS'], required: true },
+    redeemedPointsFromSale: { type: Number, default: 0 },
+    claimedPoints: { type: Number, default: 0 },
     invoiceNumber: { type: String, default: null },
     returnStatus: { type: Boolean, required: true, default: false },
     note: { type: String },
