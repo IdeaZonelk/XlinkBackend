@@ -9,23 +9,32 @@
  * Contact info@ideazone.lk for more information.
  */
 
-const Sale = require('../../models/saleModel')
-const SalePayment = require('../../models/salePaymentModel')
-const Product = require('../../models/products/product');
-const Settings = require('../../models/settingsModel')
-const SaleReturn = require('../../models/saleReturnModel')
-const Cash = require('../../models/posModel/cashModel');
-const Customers = require('../../models/customerModel');
-const mongoose = require('mongoose');
-const { isEmpty } = require('lodash');
-const Quatation = require('../../models/quatationModel');
-const generateReferenceId = require('../../utils/generateReferenceID');
-const io = require('../../server');
-const Handlebars = require('handlebars');
-const receiptSettingsSchema = require('../../models/receiptSettingsModel');
-const { generateReceiptEighty, getBarcodeScriptEighty } = require('../../receiptTemplates/eighty_mm');
-const { generateReceiptA5, getBarcodeScriptA5 } = require('../../receiptTemplates/A5');
-const { generateReceiptA4, getBarcodeScriptA4 } = require('../../receiptTemplates/A4');
+const Sale = require("../../models/saleModel");
+const SalePayment = require("../../models/salePaymentModel");
+const Product = require("../../models/products/product");
+const Settings = require("../../models/settingsModel");
+const SaleReturn = require("../../models/saleReturnModel");
+const Cash = require("../../models/posModel/cashModel");
+const Customers = require("../../models/customerModel");
+const mongoose = require("mongoose");
+const { isEmpty } = require("lodash");
+const Quatation = require("../../models/quatationModel");
+const generateReferenceId = require("../../utils/generateReferenceID");
+const io = require("../../server");
+const Handlebars = require("handlebars");
+const receiptSettingsSchema = require("../../models/receiptSettingsModel");
+const {
+  generateReceiptEighty,
+  getBarcodeScriptEighty,
+} = require("../../receiptTemplates/eighty_mm");
+const {
+  generateReceiptA5,
+  getBarcodeScriptA5,
+} = require("../../receiptTemplates/A5");
+const {
+  generateReceiptA4,
+  getBarcodeScriptA4,
+} = require("../../receiptTemplates/A4");
 
 const formatDate = (date) => {
   if (!date) return "";
@@ -68,7 +77,8 @@ const createSale = async (req, res) => {
     }
 
     saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
-    saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
+    saleData.redeemedPointsFromSale =
+      Number(saleData.redeemedPointsFromSale) || 0;
 
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
@@ -389,10 +399,9 @@ const createSale = async (req, res) => {
               );
             }
 
-            const newRedeemedPoints = Math.max(
-              0,
-              currentRedeemedPoints - claimedPoints
-            ) + redeemedPointsFromSale;
+            const newRedeemedPoints =
+              Math.max(0, currentRedeemedPoints - claimedPoints) +
+              redeemedPointsFromSale;
 
             customer.loyalty.redeemedPoints = newRedeemedPoints;
             await customer.save();
@@ -401,7 +410,9 @@ const createSale = async (req, res) => {
               `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints}`
             );
           } else {
-            console.warn(`Customer ${saleData.customer} not found for points update`);
+            console.warn(
+              `Customer ${saleData.customer} not found for points update`
+            );
           }
         }
       }
@@ -514,7 +525,9 @@ const createSale = async (req, res) => {
         barcodeScript = getBarcodeScriptA4();
         break;
       default:
-        throw new Error(`Unknown receipt template: ${receiptSettings.template}`);
+        throw new Error(
+          `Unknown receipt template: ${receiptSettings.template}`
+        );
     }
     const fullHtml = barcodeScript + html;
 
@@ -534,7 +547,6 @@ const createSale = async (req, res) => {
   }
 };
 
-
 const createNonPosSale = async (req, res) => {
   try {
     const saleData = req.body;
@@ -549,9 +561,9 @@ const createNonPosSale = async (req, res) => {
       saleData.invoiceNumber = `INV-${timestamp}-${random}`;
     }
 
-
-        saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
-        saleData.redeemedPointsFromSale = Number(saleData.redeemedPointsFromSale) || 0;
+    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.redeemedPointsFromSale =
+      Number(saleData.redeemedPointsFromSale) || 0;
 
     // Fetch receipt settings for receipt generation
     const receiptSettings = await receiptSettingsSchema.findOne();
@@ -698,7 +710,7 @@ const createNonPosSale = async (req, res) => {
         });
       }
 
-     updatedProduct.warehouse.set(warehouse, warehouseData);
+      updatedProduct.warehouse.set(warehouse, warehouseData);
       await updatedProduct.save({ validateModifiedOnly: true });
       return updatedProduct;
     });
@@ -711,7 +723,11 @@ const createNonPosSale = async (req, res) => {
       const claimedPoints = saleData.claimedPoints || 0;
       const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
 
-      if ((claimedPoints > 0 || redeemedPointsFromSale > 0) && saleData.customer && saleData.customer !== "Unknown") {
+      if (
+        (claimedPoints > 0 || redeemedPointsFromSale > 0) &&
+        saleData.customer &&
+        saleData.customer !== "Unknown"
+      ) {
         let customer;
         if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
           customer = await Customers.findById(saleData.customer);
@@ -723,17 +739,24 @@ const createNonPosSale = async (req, res) => {
         if (customer) {
           if (!customer.loyalty) {
             customer.loyalty = {
-              loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+              loyaltyReferenceNumber: `CUST-${customer._id
+                .toString()
+                .slice(-6)}`,
               redeemedPoints: 0,
             };
           }
 
-          const currentRedeemedPoints = Number(customer.loyalty.redeemedPoints) || 0;
+          const currentRedeemedPoints =
+            Number(customer.loyalty.redeemedPoints) || 0;
           if (claimedPoints > currentRedeemedPoints) {
-            console.warn(`Claimed points exceed available for ${customer.name}`);
+            console.warn(
+              `Claimed points exceed available for ${customer.name}`
+            );
           }
 
-          customer.loyalty.redeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + redeemedPointsFromSale;
+          customer.loyalty.redeemedPoints =
+            Math.max(0, currentRedeemedPoints - claimedPoints) +
+            redeemedPointsFromSale;
           await customer.save();
         }
       }
@@ -755,7 +778,6 @@ const createNonPosSale = async (req, res) => {
       }
     } catch (paymentErr) {
       console.error("Error creating initial payment record:", paymentErr);
-    }
     }
 
     // Generate receipt HTML
