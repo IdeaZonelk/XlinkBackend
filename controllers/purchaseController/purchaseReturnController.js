@@ -21,12 +21,15 @@ const returnPurchase = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-        const { _id, ...returnData } = req.body;
+        const { _id, productsData, returnAmount, returnTax, returnDiscount, productsTotal, ...returnData } = req.body;
 
         const referenceId = await generateReferenceId('PURCHASE_RETURN');
         returnData.refferenceId = referenceId;
-        returnType = 'company';
-        returnData.returnType = returnType;
+        returnData.returnType = 'company';
+        returnData.productsTotal = productsTotal;
+        returnData.returnAmount = returnAmount;
+        returnData.returnTax = returnTax;
+        returnData.returnDiscount = returnDiscount;
 
         if (isEmpty(returnData.warehouse)) {
             return res.status(400).json({ message: 'Warehouse is required.', status: 'unsuccess' });
@@ -39,86 +42,109 @@ const returnPurchase = async (req, res) => {
         }
 
         // Save the purchase return data in the PurchaseReturn collection
-        const newPurchaseReturn = new PurchaseReturn(returnData);
+        const newPurchaseReturn = new PurchaseReturn({
+            ...returnData,
+            productsData: productsData.map(product => ({
+                ...product,
+                quantity: product.quantity || 0, 
+                returnQty: product.returnQty || 0 
+            }))
+        });
         const savedReturn = await newPurchaseReturn.save();
 
-        // Remove the purchase from the Purchase collection using its _id
-        const deletedPurchase = await Purchase.findByIdAndDelete(_id);
-        if (!deletedPurchase) {
+        // Verify the original purchase exists (but don't modify it)
+        const originalPurchase = await Purchase.findById(_id);
+        if (!originalPurchase) {
             return res.status(404).json({ message: 'Original purchase not found for return' });
         }
 
-        // Extract the product data from the returned purchase to update the stock
-        const productsData = deletedPurchase.productsData;
+         // Update returnQty in the original purchase for each product
+        originalPurchase.productsData = originalPurchase.productsData.map(originalProduct => {
+            // Find the corresponding returned product
+            const returnedProduct = productsData.find(p => 
+                p.currentID === originalProduct.currentID && 
+                p.variationValue === originalProduct.variationValue
+            );
+            
+            if (returnedProduct) {
+                // If the product was returned, update the quantity and returnQty
+                const originalQty = originalProduct.originalPurchaseQty || originalProduct.quantity;
+                const newQuantity = originalProduct.quantity - returnedProduct.returnQty;
+                
+                return {
+                    ...originalProduct.toObject(),
+                    originalPurchaseQty: originalQty, // Save the original purchase quantity
+                    quantity: newQuantity, // Update current quantity by subtracting returnQty
+                    returnQty: (originalProduct.returnQty || 0) + returnedProduct.returnQty // Accumulate return quantities
+                };
+            } else {
+                // If the product wasn't returned, ensure originalPurchaseQty is set
+                const originalQty = originalProduct.originalPurchaseQty || originalProduct.quantity;
+                
+                return {
+                    ...originalProduct.toObject(),
+                    originalPurchaseQty: originalQty, // Save the original purchase quantity
+                    returnQty: originalProduct.returnQty || 0 // Keep existing returnQty or set to 0
+                };
+            }
+        });
 
-        // Prepare update promises for product quantities (to undo the purchase)
-        const updatePromises = productsData.map(async (product) => {
-            const { currentID, quantity, ptype, variationValue } = product; // Extract details from product
+        // Save the updated original purchase with returnQty values
+        await originalPurchase.save();
 
-            // Validate the current ID
+        // Update product quantities based on return quantities (reduce stock)
+        const updatePromises = productsData.map(async (returnProduct) => {
+            const { currentID, returnQty, ptype, variationValue } = returnProduct;
+            
             if (!mongoose.Types.ObjectId.isValid(currentID)) {
                 return Promise.reject({ message: `Invalid product ID: ${currentID}`, status: 'unsuccess' });
             }
 
-            // Update logic based on product type
+            const product = await Product.findById(currentID);
+            if (!product) {
+                return Promise.reject({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+            }
+
+            const warehouseKey = returnData.warehouse;
+            const SelectedWarehouse = product.warehouse.get(warehouseKey);
+
+            if (!SelectedWarehouse) {
+                return Promise.reject({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+            }
+
             if (ptype === 'Single') {
-                const updatedProduct = await Product.findById(currentID);
-                if (!updatedProduct) {
-                    return Promise.reject({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+                // Reduce stock by the returned quantity
+                SelectedWarehouse.productQty -= returnQty;
+                if (SelectedWarehouse.productQty < 0) {
+                    return Promise.reject({ message: `Not enough stock to return for product ID: ${currentID}`, status: 'unsuccess' });
                 }
-
-                const warehouseKey = deletedPurchase.warehouse;
-                const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-
-                if (!SelectedWarehouse) {
-                    return Promise.reject({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
-                // Deduct the stock quantity to reverse the purchase
-                if (SelectedWarehouse.productQty < quantity) {
-                    return Promise.reject({ message: `Not enough stock to deduct for product ID: ${currentID}`, status: 'unsuccess' });
-                }
-                SelectedWarehouse.productQty -= quantity; // Deduct the quantity that was returned
-                await updatedProduct.save(); // Save the changes to the product
-                return updatedProduct; // Return updated single product
             } else if (ptype === 'Variation') {
-                const updatedProduct = await Product.findById(currentID);
-                if (!updatedProduct) {
-                    return Promise.reject({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
-                const warehouseKey = deletedPurchase.warehouse;
-                const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-
-                if (!SelectedWarehouse) {
-                    return Promise.reject({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
                 const variation = SelectedWarehouse.variationValues.get(variationValue);
-
                 if (!variation) {
                     return Promise.reject({ message: `Variation ${variationValue} not found for product with ID: ${currentID}`, status: 'unsuccess' });
                 }
-
-                // Deduct the quantity of the variation to reverse the purchase
-                if (variation.productQty < quantity) {
-                    return Promise.reject({ message: `Not enough stock to deduct for product variation ${variationValue} of product ID: ${currentID}`, status: 'unsuccess' });
+                
+                // Reduce variation stock by the returned quantity
+                variation.productQty -= returnQty;
+                if (variation.productQty < 0) {
+                    return Promise.reject({ message: `Not enough stock to return for variation ${variationValue} of product ID: ${currentID}`, status: 'unsuccess' });
                 }
-
-                variation.productQty -= quantity; // Deduct the quantity that was returned
-                updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
-                await updatedProduct.save(); // Save the changes made to the variations
-                return updatedProduct; // Return updated variation product
+                
+                product.markModified(`warehouse.${warehouseKey}.variationValues`);
             } else {
                 return Promise.reject({ message: `Invalid product type for product with ID: ${currentID}`, status: 'unsuccess' });
             }
+
+            await product.save();
+            return product;
         });
 
         // Wait for all product updates to complete
         await Promise.all(updatePromises);
+
         await session.commitTransaction();
         res.status(201).json({
-            message: 'Purchase return saved successfully and original purchase removed',
+            message: 'Purchase return processed successfully. Stock updated but original purchase remains unchanged.',
             purchaseReturn: savedReturn,
         });
     } catch (error) {
@@ -129,6 +155,118 @@ const returnPurchase = async (req, res) => {
         session.endSession();
     }
 };
+// const returnPurchase = async (req, res) => {
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+//     try {
+//         const { _id, ...returnData } = req.body;
+
+//         const referenceId = await generateReferenceId('PURCHASE_RETURN');
+//         returnData.refferenceId = referenceId;
+//         returnType = 'company';
+//         returnData.returnType = returnType;
+
+//         if (isEmpty(returnData.warehouse)) {
+//             return res.status(400).json({ message: 'Warehouse is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(returnData.supplier)) {
+//             return res.status(400).json({ message: 'Supplier is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(returnData.date)) {
+//             return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
+//         }
+
+//         // Save the purchase return data in the PurchaseReturn collection
+//         const newPurchaseReturn = new PurchaseReturn(returnData);
+//         const savedReturn = await newPurchaseReturn.save();
+
+//         // Remove the purchase from the Purchase collection using its _id
+//         const deletedPurchase = await Purchase.findByIdAndDelete(_id);
+//         if (!deletedPurchase) {
+//             return res.status(404).json({ message: 'Original purchase not found for return' });
+//         }
+
+//         // Extract the product data from the returned purchase to update the stock
+//         const productsData = deletedPurchase.productsData;
+
+//         // Prepare update promises for product quantities (to undo the purchase)
+//         const updatePromises = productsData.map(async (product) => {
+//             const { currentID, quantity, ptype, variationValue } = product; // Extract details from product
+
+//             // Validate the current ID
+//             if (!mongoose.Types.ObjectId.isValid(currentID)) {
+//                 return Promise.reject({ message: `Invalid product ID: ${currentID}`, status: 'unsuccess' });
+//             }
+
+//             // Update logic based on product type
+//             if (ptype === 'Single') {
+//                 const updatedProduct = await Product.findById(currentID);
+//                 if (!updatedProduct) {
+//                     return Promise.reject({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 const warehouseKey = deletedPurchase.warehouse;
+//                 const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+
+//                 if (!SelectedWarehouse) {
+//                     return Promise.reject({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 // Deduct the stock quantity to reverse the purchase
+//                 if (SelectedWarehouse.productQty < quantity) {
+//                     return Promise.reject({ message: `Not enough stock to deduct for product ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+//                 SelectedWarehouse.productQty -= quantity; // Deduct the quantity that was returned
+//                 await updatedProduct.save(); // Save the changes to the product
+//                 return updatedProduct; // Return updated single product
+//             } else if (ptype === 'Variation') {
+//                 const updatedProduct = await Product.findById(currentID);
+//                 if (!updatedProduct) {
+//                     return Promise.reject({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 const warehouseKey = deletedPurchase.warehouse;
+//                 const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+
+//                 if (!SelectedWarehouse) {
+//                     return Promise.reject({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 const variation = SelectedWarehouse.variationValues.get(variationValue);
+
+//                 if (!variation) {
+//                     return Promise.reject({ message: `Variation ${variationValue} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 // Deduct the quantity of the variation to reverse the purchase
+//                 if (variation.productQty < quantity) {
+//                     return Promise.reject({ message: `Not enough stock to deduct for product variation ${variationValue} of product ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 variation.productQty -= quantity; // Deduct the quantity that was returned
+//                 updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+//                 await updatedProduct.save(); // Save the changes made to the variations
+//                 return updatedProduct; // Return updated variation product
+//             } else {
+//                 return Promise.reject({ message: `Invalid product type for product with ID: ${currentID}`, status: 'unsuccess' });
+//             }
+//         });
+
+//         // Wait for all product updates to complete
+//         await Promise.all(updatePromises);
+//         await session.commitTransaction();
+//         res.status(201).json({
+//             message: 'Purchase return saved successfully and original purchase removed',
+//             purchaseReturn: savedReturn,
+//         });
+//     } catch (error) {
+//         console.error('Error processing purchase return:', error);
+//         await session.abortTransaction();
+//         res.status(500).json({ message: 'Failed to process purchase return', error });
+//     } finally {
+//         session.endSession();
+//     }
+// };
 
 // View all purchase returns with pagination
 const fetchAllPurchaseReturns = async (req, res) => {

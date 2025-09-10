@@ -17,9 +17,11 @@ const productSchema = new mongoose.Schema({
     price: { type: String, required: true },
     variationValue: { type: String},
     ptype: { type: String, required: true }, 
+    originalPurchaseQty: { type: Number, default: 0 },
     quantity: { type: Number, required: true },
+    returnQty: { type: Number, default: 0 },
     taxRate: { type: Number},
-    subtotal: { type: Number, required: true },
+    subtotal: { type: Number, required: true }, 
 });
 
 const purchaseSchema = new mongoose.Schema({
