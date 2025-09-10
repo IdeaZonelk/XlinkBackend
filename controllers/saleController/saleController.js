@@ -76,9 +76,9 @@ const createSale = async (req, res) => {
       throw new Error("Receipt settings not found");
     }
 
-    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.claimedPoints = parseFloat(saleData.claimedPoints) || 0;
     saleData.redeemedPointsFromSale =
-      Number(saleData.redeemedPointsFromSale) || 0;
+      parseFloat(saleData.redeemedPointsFromSale) || 0;
 
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
@@ -151,7 +151,7 @@ const createSale = async (req, res) => {
     // Calculate and add earned loyalty points to the sale record
     const earnedLoyaltyPointsForSave =
       saleData.customer && saleData.customer !== "Unknown"
-        ? Math.floor((saleData.grandTotal || 0) * 0.01)
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
     // Update the sale's redeemedPointsFromSale to include earned points
@@ -381,7 +381,7 @@ const createSale = async (req, res) => {
 
       // Calculate 1% loyalty points from sale total
       const saleTotal = saleData.grandTotal || 0;
-      const earnedLoyaltyPoints = Math.floor(saleTotal * 0.01); // 1% of sale total, rounded down
+      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
 
       // Update customer points if there are any point transactions or if customer exists for earning points
       if (
@@ -413,7 +413,7 @@ const createSale = async (req, res) => {
             }
 
             const currentRedeemedPoints =
-              Number(customer.loyalty.redeemedPoints) || 0;
+              parseFloat(customer.loyalty.redeemedPoints) || 0;
 
             if (claimedPoints > currentRedeemedPoints) {
               console.warn(
@@ -482,7 +482,7 @@ const createSale = async (req, res) => {
     // Calculate earned loyalty points for receipt display
     const earnedLoyaltyPoints =
       saleData.customer && saleData.customer !== "Unknown"
-        ? Math.floor((saleData.grandTotal || 0) * 0.01)
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
     // Add earned points to redeemedPointsFromSale for display
@@ -626,9 +626,9 @@ const createNonPosSale = async (req, res) => {
       saleData.invoiceNumber = `INV-${timestamp}-${random}`;
     }
 
-    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.claimedPoints = parseFloat(saleData.claimedPoints) || 0;
     saleData.redeemedPointsFromSale =
-      Number(saleData.redeemedPointsFromSale) || 0;
+      parseFloat(saleData.redeemedPointsFromSale) || 0;
 
     // Fetch receipt settings for receipt generation
     const receiptSettings = await receiptSettingsSchema.findOne();
@@ -697,7 +697,7 @@ const createNonPosSale = async (req, res) => {
     // Calculate and add earned loyalty points to the sale record
     const earnedLoyaltyPointsForSave =
       saleData.customer && saleData.customer !== "Unknown"
-        ? Math.floor((saleData.grandTotal || 0) * 0.01)
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
     // Update the sale's redeemedPointsFromSale to include earned points
@@ -801,7 +801,7 @@ const createNonPosSale = async (req, res) => {
 
       // Calculate 1% loyalty points from sale total
       const saleTotal = saleData.grandTotal || 0;
-      const earnedLoyaltyPoints = Math.floor(saleTotal * 0.01); // 1% of sale total, rounded down
+      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
 
       if (
         (claimedPoints > 0 ||
@@ -831,7 +831,7 @@ const createNonPosSale = async (req, res) => {
           }
 
           const currentRedeemedPoints =
-            Number(customer.loyalty.redeemedPoints) || 0;
+            parseFloat(customer.loyalty.redeemedPoints) || 0;
           if (claimedPoints > currentRedeemedPoints) {
             console.warn(
               `Claimed points exceed available for ${customer.name}`
@@ -901,7 +901,7 @@ const createNonPosSale = async (req, res) => {
     // Calculate earned loyalty points for receipt display
     const earnedLoyaltyPoints =
       saleData.customer && saleData.customer !== "Unknown"
-        ? Math.floor((saleData.grandTotal || 0) * 0.01)
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
     // Add earned points to redeemedPointsFromSale for display
