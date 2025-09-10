@@ -1,18 +1,18 @@
-const Handlebars = require('handlebars');
+const Handlebars = require("handlebars");
 
-Handlebars.registerHelper('formatCurrency', function (number) {
-    if (isNaN(number)) return '0.00';
-    const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split('.');
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${formattedInteger}.${decimalPart}`;
+Handlebars.registerHelper("formatCurrency", function (number) {
+  if (isNaN(number)) return "0.00";
+  const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${formattedInteger}.${decimalPart}`;
 });
 
-Handlebars.registerHelper('countProducts', function (products) {
-    return products?.length || 0;
+Handlebars.registerHelper("countProducts", function (products) {
+  return products?.length || 0;
 });
 
-Handlebars.registerHelper('addOne', function (index) {
-    return index + 1;
+Handlebars.registerHelper("addOne", function (index) {
+  return index + 1;
 });
 
 Handlebars.registerHelper("multiply", function (a, b) {
@@ -26,22 +26,20 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
   const d = parseFloat(discount) || 0;
   const t = parseFloat(taxRate) || 0;
 
-  const finalPrice = p - d + (p * t);
+  const finalPrice = p - d + p * t;
   return finalPrice.toFixed(2);
 });
 
-
-
 const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+  if (!date) return "";
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const template = Handlebars.compile(`
@@ -387,20 +385,15 @@ const template = Handlebars.compile(`
         <span>Discount:</span>
         <span>{{formatCurrency newSale.discount}}</span>
     </div>
-     {{#if newSale.claimedPoints}}
     <div class="summary-row">
         <span>Claimed Points:</span>
-        <span>{{formatCurrency newSale.claimedPoints}}</span>
+        <span>{{newSale.claimedPoints}}</span>
     </div>
-    {{/if}}
-    
-    {{#if newSale.redeemedPointsFromSale}}
     <div class="summary-row">
         <span>Redeemed Points:</span>
-        <span>{{formatCurrency newSale.redeemedPointsFromSale}}</span>
+        <span>{{newSale.redeemedPointsFromSale}}</span>
     </div>
-    {{/if}}
-     <div class="summary-row">
+
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <div class="summary-row">
         <span>Paid Amount : 0.00</span>
@@ -474,19 +467,19 @@ const template = Handlebars.compile(`
 `);
 
 module.exports = {
-    generateReceiptA4: (data) => {
-        // Format the date before passing to template
-        const formattedData = {
-            ...data,
-            newSale: {
-                ...data.newSale,
-                date: formatDate(new Date()),
-            },
-        };
-        return template(formattedData);
-    },
-    getBarcodeScriptA4: () => {
-        return `
+  generateReceiptA4: (data) => {
+    // Format the date before passing to template
+    const formattedData = {
+      ...data,
+      newSale: {
+        ...data.newSale,
+        date: formatDate(new Date()),
+      },
+    };
+    return template(formattedData);
+  },
+  getBarcodeScriptA4: () => {
+    return `
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -501,5 +494,5 @@ module.exports = {
             });
         </script>
         `;
-    }
+  },
 };
