@@ -124,7 +124,7 @@ router.get('/findStokeReportByCode', stokeReportController.findStokeReportByCode
 router.get('/findProductDetailsById/:id',stokeReportController.findProductDetailsById);
 
 //Making routes for register reports
-router.get('/findRegisterData',registerReportController.getAllRegistry);
+router.get("/findRegisterData/:cashierUsername", registerReportController.getAllRegistry);
 
 router.get('/generateHoldReferenceNo', posController.generateReferenceNo);
 

@@ -279,7 +279,6 @@ const getZReportData = async (req, res) => {
     const { cashRegisterID } = req.params;
 
     try {
-        // 1. Find the cash register
         const cashRegister = await Cash.findById(cashRegisterID);
         if (!cashRegister) {
             return res.status(404).json({
@@ -288,19 +287,15 @@ const getZReportData = async (req, res) => {
             });
         }
 
-        // 2. Get sales for this register - Match EXACT field names from your documents
         const salesFilter = {
-            cashRegisterID: cashRegisterID, 
+            cashRegisterID: cashRegisterID,
             saleType: "POS"
         };
-
-        console.log("Sales Filter:", salesFilter);
 
         const sales = await Sale.find(salesFilter)
             .sort({ date: 1 })
             .lean();
 
-        // 3. Calculate totals
         const totals = {
             grandTotal: 0,
             pureProfit: 0,
