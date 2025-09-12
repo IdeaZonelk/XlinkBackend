@@ -1,4 +1,5 @@
 const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 
 Handlebars.registerHelper("formatCurrency", function (number) {
   if (isNaN(number)) return "0.00";
@@ -32,14 +33,9 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
 
 const formatDate = (date) => {
   if (!date) return "";
-  const d = new Date(date);
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 const template = Handlebars.compile(`
@@ -389,10 +385,6 @@ const template = Handlebars.compile(`
         <span>Claimed Points:</span>
         <span>{{newSale.claimedPoints}}</span>
     </div>
-    <div class="summary-row">
-        <span>Redeemed Points:</span>
-        <span>{{newSale.redeemedPointsFromSale}}</span>
-    </div>
 
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <div class="summary-row">
@@ -433,7 +425,7 @@ const template = Handlebars.compile(`
 
         <!-- Footer Section -->
         <div class="footer">
-            <p style="text-align: center; font-size: 11px; text-color: #000000;">*** *NO EXCHANGE* *NO CASH REFUND* *NO WARRANTY FOR PHYSICAL BURN MARK, LIGHTING DAMAGE* *** <br/> THANK YOU FOR SHOPPING WITH US!</p>
+            <p style="text-align: center; font-size: 11px; text-color: #000000;">*** *NO EXCHANGE* *NO CASH REFUND* *NO WARRANTY FOR PHYSICAL BURN MARK, LIGHTING DAMAGE* *** <br/> THANK YOU FOR SHOPPING WITH US!<br/>Items can be returned within 3 days from the date of purchase, with the original bill.</p>
             
             <div className="flex justify-start mt-5">
                 <p style="text-left: center; font-size: 12px; margin-left:5px;">Signature  _________________________________</p>

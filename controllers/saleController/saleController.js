@@ -22,6 +22,7 @@ const Quatation = require("../../models/quatationModel");
 const generateReferenceId = require("../../utils/generateReferenceID");
 const io = require("../../server");
 const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 const receiptSettingsSchema = require("../../models/receiptSettingsModel");
 const {
   generateReceiptEighty,
@@ -38,14 +39,9 @@ const {
 
 const formatDate = (date) => {
   if (!date) return "";
-  const d = new Date(date);
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 Handlebars.registerHelper("formatPaymentType", function (type) {
@@ -83,6 +79,7 @@ const createSale = async (req, res) => {
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
     saleData.invoiceNumber = saleData.invoiceNumber;
+    saleData.date = new Date(); // POS sale uses server UTC time, not frontend time
 
     const settings = await Settings.findOne();
     if (!settings || !settings.defaultWarehouse) {
@@ -96,9 +93,7 @@ const createSale = async (req, res) => {
     if (isEmpty(saleData.refferenceId)) {
       throw new Error("Reference ID is required.");
     }
-    if (isEmpty(saleData.date)) {
-      throw new Error("Date is required.");
-    }
+    // Note: Date validation removed for POS sales since we automatically set server time
     if (!saleData.productsData || saleData.productsData.length === 0) {
       throw new Error("Products Data is required.");
     }
@@ -461,14 +456,9 @@ const createSale = async (req, res) => {
 
     const formatDate = (date) => {
       if (!date) return "";
-      const d = new Date(date);
-      return d.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+      const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+      return sriLankanTime.format("MMM DD, YYYY HH:mm");
     };
 
     const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
@@ -655,11 +645,10 @@ const createNonPosSale = async (req, res) => {
         .status(400)
         .json({ message: "Reference ID is required.", status: "unsuccess" });
     }
-    if (isEmpty(saleData.date)) {
-      return res
-        .status(400)
-        .json({ message: "Date is required.", status: "unsuccess" });
-    }
+    
+    // Set server-side UTC time for nonPos sales (same as POS sales)
+    saleData.date = new Date();
+    
     if (!saleData.productsData || saleData.productsData.length === 0) {
       return res
         .status(400)
@@ -879,14 +868,9 @@ const createNonPosSale = async (req, res) => {
     // Date formatting helper
     const formatDate = (date) => {
       if (!date) return "";
-      const d = new Date(date);
-      return d.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+      const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+      return sriLankanTime.format("MMM DD, YYYY HH:mm");
     };
 
     const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
