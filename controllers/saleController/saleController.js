@@ -154,9 +154,9 @@ const createSale = async (req, res) => {
         ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
-    // Update the sale's redeemedPointsFromSale to include earned points
-    newSale.redeemedPointsFromSale =
-      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
+    // Fixed: The redeemedPointsFromSale is already calculated on frontend, no need to add earned points again
+    // newSale.redeemedPointsFromSale =
+    //   (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
 
     const productsData = saleData.productsData;
 
@@ -421,17 +421,17 @@ const createSale = async (req, res) => {
               );
             }
 
-            // Calculate new points: current points - claimed points + redeemed points + earned loyalty points
+            // Calculate new points: current points - claimed points + redeemed points
+            // Note: redeemedPointsFromSale already contains the calculated loyalty points from frontend
             const newRedeemedPoints =
               Math.max(0, currentRedeemedPoints - claimedPoints) +
-              redeemedPointsFromSale +
-              earnedLoyaltyPoints;
+              redeemedPointsFromSale;
 
             customer.loyalty.redeemedPoints = newRedeemedPoints;
             await customer.save();
 
             console.log(
-              `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints} (Earned: ${earnedLoyaltyPoints}, Claimed: ${claimedPoints}, Redeemed: ${redeemedPointsFromSale})`
+              `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints} (Claimed: ${claimedPoints}, Redeemed from Sale: ${redeemedPointsFromSale})`
             );
           } else {
             console.warn(
@@ -485,9 +485,8 @@ const createSale = async (req, res) => {
         ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
-    // Add earned points to redeemedPointsFromSale for display
-    const displayRedeemedPoints =
-      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPoints;
+    // Use redeemedPointsFromSale directly for display (already calculated on frontend)
+    const displayRedeemedPoints = saleData.redeemedPointsFromSale || 0;
 
     console.log("POS Sale Loyalty Points Debug:", {
       claimedPoints: saleData.claimedPoints || 0,
@@ -700,9 +699,9 @@ const createNonPosSale = async (req, res) => {
         ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
-    // Update the sale's redeemedPointsFromSale to include earned points
-    newSale.redeemedPointsFromSale =
-      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
+    // Fixed: The redeemedPointsFromSale is already calculated on frontend, no need to add earned points again
+    // newSale.redeemedPointsFromSale =
+    //   (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
 
     const productsData = saleData.productsData;
 
@@ -838,15 +837,15 @@ const createNonPosSale = async (req, res) => {
             );
           }
 
-          // Calculate new points: current points - claimed points + redeemed points + earned loyalty points
+          // Calculate new points: current points - claimed points + redeemed points
+          // Note: redeemedPointsFromSale already contains the calculated loyalty points from frontend
           customer.loyalty.redeemedPoints =
             Math.max(0, currentRedeemedPoints - claimedPoints) +
-            redeemedPointsFromSale +
-            earnedLoyaltyPoints;
+            redeemedPointsFromSale;
           await customer.save();
 
           console.log(
-            `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${customer.loyalty.redeemedPoints} (Earned: ${earnedLoyaltyPoints}, Claimed: ${claimedPoints}, Redeemed: ${redeemedPointsFromSale})`
+            `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${customer.loyalty.redeemedPoints} (Claimed: ${claimedPoints}, Redeemed from Sale: ${redeemedPointsFromSale})`
           );
         }
       }
@@ -904,9 +903,8 @@ const createNonPosSale = async (req, res) => {
         ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
         : 0;
 
-    // Add earned points to redeemedPointsFromSale for display
-    const displayRedeemedPoints =
-      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPoints;
+    // Use redeemedPointsFromSale directly for display (already calculated on frontend)
+    const displayRedeemedPoints = saleData.redeemedPointsFromSale || 0;
 
     console.log("Non-POS Sale Loyalty Points Debug:", {
       claimedPoints: saleData.claimedPoints || 0,
