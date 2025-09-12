@@ -748,7 +748,8 @@ const findSaleById = async (req, res) => {
             if (baseProduct) {
                 console.log(`Base product found for ID ${productData.currentID}:`, JSON.stringify(baseProduct, null, 2));
                 let stockQty = "";
-                let productCost = ""
+                let productCost = "";
+                 let taxType = productData.taxType || "";
 
                 const selectedWarehouse = baseProduct.warehouse[warehouseKey];
                 console.log(`Warehouse data for product ${baseProduct._id}:`, JSON.stringify(selectedWarehouse, null, 2));
@@ -758,8 +759,12 @@ const findSaleById = async (req, res) => {
                     return {
                         ...productData,
                         stockQty: "N/A",
-                        productCost
+                        productCost,
+                        taxType
                     };
+                }
+                   if (selectedWarehouse.taxType) {
+                    taxType = selectedWarehouse.taxType;
                 }
 
                 if (productData.variationValue && selectedWarehouse.variationValues) {
@@ -767,6 +772,9 @@ const findSaleById = async (req, res) => {
                     if (variation) {
                         stockQty = variation.productQty || "";
                         productCost = variation.productCost || "";
+                          if (variation.taxType) {
+                            taxType = variation.taxType;
+                        }
                     } else {
                         console.error(`Variation ${productData.variationValue} not found for product with ID: ${baseProduct._id}`);
                     }
@@ -788,6 +796,7 @@ const findSaleById = async (req, res) => {
                     specialDiscount: productData.specialDiscount,
                     quantity: productData.quantity,
                     stockQty,
+                    taxType,
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
@@ -800,7 +809,10 @@ const findSaleById = async (req, res) => {
 
             console.warn(`Base product with currentID ${productData.currentID} not found.`);
             // Return original product data if no base product found
-            return productData;
+            return {
+                ...productData,
+                taxType: productData.taxType || "" 
+            };
         });
 
         const saleWithUpdatedProducts = {
@@ -891,15 +903,31 @@ const updateSale = async (req, res) => {
                     if (!selectedWarehouse) {
                         throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
                     }
-                    const variation = selectedWarehouse.variationValues.get(variationValue);
-                    if (!variation) {
-                        throw new Error(`Variation ${variationValue} not found for product ID: ${currentID}`);
-                    }
-                    if (quantityDifference < 0 && variation.productQty < Math.abs(quantityDifference)) {
-                        throw new Error(`Insufficient variation stock for product ID: ${currentID}`);
-                    }
-                    variation.productQty -= quantityDifference;
-                    updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+                  const productVariations = updatedProducts.filter(
+                        p => p.currentID === currentID && p.ptype === 'Variation'
+                    );
+
+                    productVariations.forEach(variationProduct => {
+                        const variationKey = variationProduct.variationValue;
+                        const newQty = variationProduct.quantity;
+                        const existingVarProduct = existingProducts.find(
+                            ep => ep.currentID === currentID && ep.variationValue === variationKey
+                        );
+                        const prevQty = existingVarProduct ? existingVarProduct.quantity : 0;
+                        const qtyDiff = newQty - prevQty;
+
+                        const variation = selectedWarehouse.variationValues.get(variationKey);
+                        if (!variation) {
+                            errors.push(`Variation ${variationKey} not found for product ID: ${currentID}`);
+                            return;
+                        }
+                        if (qtyDiff < 0 && variation.productQty < Math.abs(qtyDiff)) {
+                            errors.push(`Insufficient variation stock for product ID: ${currentID}, variation: ${variationKey}`);
+                            return;
+                        }
+                        variation.productQty -= qtyDiff;
+                        updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+                    });
                 } else {
                     errors.push(`Invalid product type for product with ID: ${currentID}`);
                     return;
