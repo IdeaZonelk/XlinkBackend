@@ -52,6 +52,12 @@ const createPurchase = async (req, res) => {
         purchaseData.paymentType = purchaseData.paymentType || 'cash';
         purchaseData.orderStatus = purchaseData.orderStatus || 'ordered';
 
+                purchaseData.productsData = purchaseData.productsData.map(product => ({
+            ...product,
+            originalPurchaseQty: Number(product.quantity) || 0, // Set to actual quantity instead of 0
+            returnQty: 0 // Initialize returnQty to 0
+        }));
+
         const newPruchase = new Purchase(purchaseData);
         const productsData = purchaseData.productsData;
 
@@ -443,6 +449,23 @@ const updatePurchase = async (req, res) => {
 
         const existingProducts = existingPurchase.productsData;
         const updatedProducts = updateData.productsData;
+
+                // Preserve originalPurchaseQty and returnQty from existing products
+        const productsWithOriginalData = updatedProducts.map(updatedProduct => {
+            // Find the corresponding existing product
+            const existingProduct = existingProducts.find(p => 
+                p.currentID === updatedProduct.currentID && 
+                p.variationValue === updatedProduct.variationValue
+            );
+            
+            return {
+                ...updatedProduct,
+                originalPurchaseQty: existingProduct ? existingProduct.quantity : Number(updatedProduct.quantity),
+                returnQty: existingProduct ? existingProduct.returnQty : 0
+            };
+        });
+
+        updateData.productsData = productsWithOriginalData;
 
         // Group products by ID for batch processing
         const productGroups = {};
