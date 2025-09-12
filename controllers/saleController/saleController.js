@@ -1623,6 +1623,8 @@ const printInvoice = async (req, res) => {
                     appliedWholesale: product.appliedWholesale,
                     quantity: product.quantity,
                     subtotal: product.subtotal,
+                    taxRate: product.taxRate || 0,
+                    taxType: product.taxType || 'exclusive',
                 })),
                 baseTotal: sale.baseTotal || 0,
                 grandTotal: sale.grandTotal,
