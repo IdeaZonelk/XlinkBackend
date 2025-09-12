@@ -76,9 +76,9 @@ const createSale = async (req, res) => {
       throw new Error("Receipt settings not found");
     }
 
-    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.claimedPoints = parseFloat(saleData.claimedPoints) || 0;
     saleData.redeemedPointsFromSale =
-      Number(saleData.redeemedPointsFromSale) || 0;
+      parseFloat(saleData.redeemedPointsFromSale) || 0;
 
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
@@ -147,6 +147,17 @@ const createSale = async (req, res) => {
     }
 
     const newSale = new Sale(saleData);
+
+    // Calculate and add earned loyalty points to the sale record
+    const earnedLoyaltyPointsForSave =
+      saleData.customer && saleData.customer !== "Unknown"
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
+        : 0;
+
+    // Update the sale's redeemedPointsFromSale to include earned points
+    newSale.redeemedPointsFromSale =
+      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
+
     const productsData = saleData.productsData;
 
     // Prepare update promises for product quantities
@@ -368,7 +379,18 @@ const createSale = async (req, res) => {
       const claimedPoints = saleData.claimedPoints || 0;
       const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
 
-      if (claimedPoints > 0 || redeemedPointsFromSale > 0) {
+      // Calculate 1% loyalty points from sale total
+      const saleTotal = saleData.grandTotal || 0;
+      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
+
+      // Update customer points if there are any point transactions or if customer exists for earning points
+      if (
+        claimedPoints > 0 ||
+        redeemedPointsFromSale > 0 ||
+        (earnedLoyaltyPoints > 0 &&
+          saleData.customer &&
+          saleData.customer !== "Unknown")
+      ) {
         if (saleData.customer && saleData.customer !== "Unknown") {
           let customer;
 
@@ -391,7 +413,7 @@ const createSale = async (req, res) => {
             }
 
             const currentRedeemedPoints =
-              Number(customer.loyalty.redeemedPoints) || 0;
+              parseFloat(customer.loyalty.redeemedPoints) || 0;
 
             if (claimedPoints > currentRedeemedPoints) {
               console.warn(
@@ -399,15 +421,17 @@ const createSale = async (req, res) => {
               );
             }
 
+            // Calculate new points: current points - claimed points + redeemed points + earned loyalty points
             const newRedeemedPoints =
               Math.max(0, currentRedeemedPoints - claimedPoints) +
-              redeemedPointsFromSale;
+              redeemedPointsFromSale +
+              earnedLoyaltyPoints;
 
             customer.loyalty.redeemedPoints = newRedeemedPoints;
             await customer.save();
 
             console.log(
-              `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints}`
+              `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints} (Earned: ${earnedLoyaltyPoints}, Claimed: ${claimedPoints}, Redeemed: ${redeemedPointsFromSale})`
             );
           } else {
             console.warn(
@@ -454,6 +478,25 @@ const createSale = async (req, res) => {
           : 0;
       return sum + saved + (product.specialDiscount || 0);
     }, 0);
+
+    // Calculate earned loyalty points for receipt display
+    const earnedLoyaltyPoints =
+      saleData.customer && saleData.customer !== "Unknown"
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
+        : 0;
+
+    // Add earned points to redeemedPointsFromSale for display
+    const displayRedeemedPoints =
+      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPoints;
+
+    console.log("POS Sale Loyalty Points Debug:", {
+      claimedPoints: saleData.claimedPoints || 0,
+      redeemedPointsFromSale: saleData.redeemedPointsFromSale || 0,
+      earnedLoyaltyPoints: earnedLoyaltyPoints,
+      displayRedeemedPoints: displayRedeemedPoints,
+      customer: saleData.customer,
+      grandTotal: saleData.grandTotal,
+    });
 
     const templateData = {
       settings: {
@@ -504,9 +547,24 @@ const createSale = async (req, res) => {
           : undefined,
         barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
         claimedPoints: newSale.claimedPoints || 0,
-        redeemedPointsFromSale: newSale.redeemedPointsFromSale || 0,
+        redeemedPointsFromSale: displayRedeemedPoints,
       },
     };
+
+    console.log(
+      "POS Sale Template Data Debug:",
+      JSON.stringify(
+        {
+          claimedPoints: templateData.newSale.claimedPoints,
+          redeemedPointsFromSale: templateData.newSale.redeemedPointsFromSale,
+          earnedLoyaltyPoints: earnedLoyaltyPoints,
+          customer: saleData.customer,
+          template: newSale.receiptSize || receiptSettings.template,
+        },
+        null,
+        2
+      )
+    );
 
     let html = "";
     let barcodeScript = "";
@@ -530,6 +588,13 @@ const createSale = async (req, res) => {
         );
     }
     const fullHtml = barcodeScript + html;
+
+    console.log("POS Sale Generated HTML contains loyalty points:", {
+      hasClaimedPoints: fullHtml.includes("Claimed Points"),
+      hasRedeemedPoints: fullHtml.includes("Redeemed Points"),
+      templateUsed: newSale.receiptSize || receiptSettings.template,
+      htmlLength: fullHtml.length,
+    });
 
     res.status(201).json({
       message: "Sale created successfully!",
@@ -561,9 +626,9 @@ const createNonPosSale = async (req, res) => {
       saleData.invoiceNumber = `INV-${timestamp}-${random}`;
     }
 
-    saleData.claimedPoints = Number(saleData.claimedPoints) || 0;
+    saleData.claimedPoints = parseFloat(saleData.claimedPoints) || 0;
     saleData.redeemedPointsFromSale =
-      Number(saleData.redeemedPointsFromSale) || 0;
+      parseFloat(saleData.redeemedPointsFromSale) || 0;
 
     // Fetch receipt settings for receipt generation
     const receiptSettings = await receiptSettingsSchema.findOne();
@@ -628,6 +693,17 @@ const createNonPosSale = async (req, res) => {
     saleData.paymentType = paymentTypes;
 
     const newSale = new Sale(saleData);
+
+    // Calculate and add earned loyalty points to the sale record
+    const earnedLoyaltyPointsForSave =
+      saleData.customer && saleData.customer !== "Unknown"
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
+        : 0;
+
+    // Update the sale's redeemedPointsFromSale to include earned points
+    newSale.redeemedPointsFromSale =
+      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
+
     const productsData = saleData.productsData;
 
     // Prepare update promises for product quantities
@@ -723,8 +799,16 @@ const createNonPosSale = async (req, res) => {
       const claimedPoints = saleData.claimedPoints || 0;
       const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
 
+      // Calculate 1% loyalty points from sale total
+      const saleTotal = saleData.grandTotal || 0;
+      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
+
       if (
-        (claimedPoints > 0 || redeemedPointsFromSale > 0) &&
+        (claimedPoints > 0 ||
+          redeemedPointsFromSale > 0 ||
+          (earnedLoyaltyPoints > 0 &&
+            saleData.customer &&
+            saleData.customer !== "Unknown")) &&
         saleData.customer &&
         saleData.customer !== "Unknown"
       ) {
@@ -747,17 +831,23 @@ const createNonPosSale = async (req, res) => {
           }
 
           const currentRedeemedPoints =
-            Number(customer.loyalty.redeemedPoints) || 0;
+            parseFloat(customer.loyalty.redeemedPoints) || 0;
           if (claimedPoints > currentRedeemedPoints) {
             console.warn(
               `Claimed points exceed available for ${customer.name}`
             );
           }
 
+          // Calculate new points: current points - claimed points + redeemed points + earned loyalty points
           customer.loyalty.redeemedPoints =
             Math.max(0, currentRedeemedPoints - claimedPoints) +
-            redeemedPointsFromSale;
+            redeemedPointsFromSale +
+            earnedLoyaltyPoints;
           await customer.save();
+
+          console.log(
+            `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${customer.loyalty.redeemedPoints} (Earned: ${earnedLoyaltyPoints}, Claimed: ${claimedPoints}, Redeemed: ${redeemedPointsFromSale})`
+          );
         }
       }
     } catch (pointsError) {
@@ -808,6 +898,24 @@ const createNonPosSale = async (req, res) => {
       return sum + saved + product.specialDiscount;
     }, 0);
 
+    // Calculate earned loyalty points for receipt display
+    const earnedLoyaltyPoints =
+      saleData.customer && saleData.customer !== "Unknown"
+        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
+        : 0;
+
+    // Add earned points to redeemedPointsFromSale for display
+    const displayRedeemedPoints =
+      (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPoints;
+
+    console.log("Non-POS Sale Loyalty Points Debug:", {
+      claimedPoints: saleData.claimedPoints || 0,
+      redeemedPointsFromSale: saleData.redeemedPointsFromSale || 0,
+      earnedLoyaltyPoints: earnedLoyaltyPoints,
+      displayRedeemedPoints: displayRedeemedPoints,
+      customer: saleData.customer,
+    });
+
     const templateData = {
       settings: {
         companyName: settings.companyName || "",
@@ -819,6 +927,7 @@ const createNonPosSale = async (req, res) => {
           : "",
         logo: receiptSettings.logo ? logoUrl : null,
       },
+      isNonPosSale: true, // Flag to identify non-POS sales
       newSale: {
         cashierUsername: newSale.cashierUsername || "",
         invoiceNumber: newSale.invoiceNumber || "",
@@ -858,8 +967,24 @@ const createNonPosSale = async (req, res) => {
               newSale.taxValue || 0
           : undefined,
         barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+        claimedPoints: saleData.claimedPoints || 0,
+        redeemedPointsFromSale: displayRedeemedPoints,
       },
     };
+
+    console.log(
+      "Non-POS Sale Template Data Debug:",
+      JSON.stringify(
+        {
+          claimedPoints: templateData.newSale.claimedPoints,
+          redeemedPointsFromSale: templateData.newSale.redeemedPointsFromSale,
+          isNonPosSale: templateData.isNonPosSale,
+          template: newSale.receiptSize || receiptSettings.template,
+        },
+        null,
+        2
+      )
+    );
 
     switch (newSale.receiptSize || receiptSettings.template) {
       case "80mm":
@@ -880,6 +1005,17 @@ const createNonPosSale = async (req, res) => {
         );
     }
     const fullHtml = barcodeScript + html;
+
+    console.log("Generated HTML contains loyalty points:", {
+      hasClaimedPoints: fullHtml.includes("Claimed Points"),
+      hasRedeemedPoints: fullHtml.includes("Redeemed Points"),
+      templateUsed: newSale.receiptSize || receiptSettings.template,
+      claimedPointsValue:
+        fullHtml.match(/Claimed Points:.*?<\/td>/s)?.[0] || "Not found",
+      redeemedPointsValue:
+        fullHtml.match(/Redeemed Points From Sale:.*?<\/td>/s)?.[0] ||
+        "Not found",
+    });
 
     res.status(201).json({
       message: "Non-POS Sale created successfully!",
@@ -2154,8 +2290,18 @@ const printInvoice = async (req, res) => {
           sale.note && sale.note !== "null" && sale.note.trim() !== ""
             ? sale.note
             : "",
+        claimedPoints: sale.claimedPoints || 0,
+        redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
       },
     };
+
+    console.log("Print Invoice Debug:", {
+      saleId: saleId,
+      claimedPoints: sale.claimedPoints || 0,
+      redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
+      customer: sale.customer,
+      grandTotal: sale.grandTotal,
+    });
 
     const invoiceTemplate = `
         <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
@@ -2452,6 +2598,16 @@ const printInvoice = async (req, res) => {
                     </div>
 
                     <div class="payment-right">
+                        <!-- Loyalty Points Section (Before Subtotal) -->
+                        <div class="summary-row">
+                            <span><b>Claimed Points:</b></span>
+                            <span>{{newSale.claimedPoints}}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span><b>Redeemed Points From Sale:</b></span>
+                            <span>{{newSale.redeemedPointsFromSale}}</span>
+                        </div>
+                        
                         <!-- Calculate subtotal as sum of all products -->
                         <div class="summary-row">
                             <span><b>Subtotal:</b></span>
