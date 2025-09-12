@@ -1,4 +1,5 @@
 const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 
 Handlebars.registerHelper("formatCurrency", function (number) {
   if (isNaN(number)) return "0.00";
@@ -40,14 +41,9 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
 
 const formatDate = (date) => {
   if (!date) return "";
-  const d = new Date(date);
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 const template = Handlebars.compile(`
@@ -175,10 +171,6 @@ const template = Handlebars.compile(`
         <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
         <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
     </tr>
-    <tr>
-        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Redeemed Points From Sale:</td>
-        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.redeemedPointsFromSale}}</td>
-    </tr>
 
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <tr>
@@ -235,7 +227,8 @@ const template = Handlebars.compile(`
 
         <div style="text-align: center; margin-top: 15px; font-size: 0.8em;">
         <p style="margin: 3.5px 0;">
-            THANK YOU FOR SHOPPING WITH US!<br><br>
+            THANK YOU FOR SHOPPING WITH US!<br>
+            Items can be returned within 3 days from the date of purchase, with the original bill.<br><br>
         </p>
 
         <!-- Barcode Section -->
