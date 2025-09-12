@@ -370,6 +370,7 @@ const createSale = async (req, res) => {
                     specialDiscount: product.specialDiscount || 0,
                     discount: product.discount || 0,
                     taxRate: product.taxRate || 0,
+                    taxType: product.taxType || 'exclusive',
                 })),
                 baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,

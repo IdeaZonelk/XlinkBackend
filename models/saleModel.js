@@ -23,6 +23,7 @@ const productSchema = new mongoose.Schema({
   variationValue: { type: String },
   quantity: { type: Number, required: true },
   stockQty: { type: Number },
+  taxType: { type: String, default: 'exclusive' },
   taxRate: { type: Number },
   subtotal: { type: Number, required: true },
   productProfit: { type: Number, required: true, default: 0 },
