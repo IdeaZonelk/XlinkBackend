@@ -349,7 +349,6 @@ const createSale = async (req, res) => {
 
     // Apply product updates
     await Promise.all(updatePromises);
-
     // Save the sale
     await newSale.save();
 
@@ -469,12 +468,6 @@ const createSale = async (req, res) => {
       return sum + saved + (product.specialDiscount || 0);
     }, 0);
 
-    // Calculate earned loyalty points for receipt display
-    const earnedLoyaltyPoints =
-      saleData.customer && saleData.customer !== "Unknown"
-        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
-        : 0;
-
     // Use redeemedPointsFromSale directly for display (already calculated on frontend)
     const displayRedeemedPoints = saleData.redeemedPointsFromSale || 0;
 
@@ -487,58 +480,46 @@ const createSale = async (req, res) => {
       grandTotal: saleData.grandTotal,
     });
 
-    const templateData = {
-      settings: {
-        companyName: settings.companyName || "",
-        companyAddress: receiptSettings.address
-          ? settings.address || "Address: XXX-XXX-XXXX"
-          : "",
-        companyMobile: receiptSettings.phone
-          ? settings.companyMobile || "Phone: XXX-XXX-XXXX"
-          : "",
-        logo: receiptSettings.logo ? logoUrl : null,
-      },
-      newSale: {
-        cashierUsername: newSale.cashierUsername || "",
-        invoiceNumber: newSale.invoiceNumber || "",
-        date: formatDate(newSale.date),
-        customer: receiptSettings.customer ? newSale.customer || "" : "",
-        customerName: newSale.customerName || "",
-        productsData: saleData.productsData.map((product) => ({
-          name: product.name || "Unnamed Product",
-          price: product.applicablePrice || 0,
-          appliedWholesale: product.appliedWholesale || false,
-          quantity: product.quantity || 0,
-          subtotal: product.subtotal || 0,
-          specialDiscount: product.specialDiscount || 0,
-          discount: product.discount || 0,
-          taxRate: product.taxRate || 0,
-        })),
-        baseTotal: newSale.baseTotal || 0,
-        grandTotal: newSale.grandTotal || 0,
-        totalPcs: newSale.totalPcs || 0,
-        discount: newSale.discountValue || 0,
-        cashBalance: newSale.cashBalance || 0,
-        paymentStatus: newSale.paymentStatus || saleData.paymentStatus || "",
-        paymentType: saleData.paymentType.map((payment) => ({
-          type: payment.type || "Unknown",
-          amount: payment.amount || 0,
-        })),
-        note:
-          receiptSettings.note && newSale.note && newSale.note !== "null"
-            ? newSale.note
-            : "",
-        totalSavedAmount: receiptSettings.taxDiscountShipping
-          ? totalSavedAmount +
-            (newSale.discountValue || 0) +
-            (newSale.offerValue || 0) -
-            (newSale.taxValue || 0)
-          : undefined,
-        barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
-        claimedPoints: newSale.claimedPoints || 0,
-        redeemedPointsFromSale: displayRedeemedPoints,
-      },
-    };
+  const templateData = {
+            settings: {
+                companyName: settings.companyName || '',
+                companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
+                companyMobile: receiptSettings.phone ? (settings.companyMobile || 'Phone: XXX-XXX-XXXX') : '',
+                logo: receiptSettings.logo ? logoUrl : null,
+            },
+            newSale: {
+                cashierUsername: newSale.cashierUsername || '',
+                invoiceNumber: newSale.invoiceNumber || '',
+                date: formatDate(newSale.date),
+                customer: receiptSettings.customer ? (newSale.customer || '') : '',
+                productsData: saleData.productsData.map(product => ({
+                    name: product.name || 'Unnamed Product',
+                    price: product.applicablePrice || 0,
+                    appliedWholesale: product.appliedWholesale || false,
+                    quantity: product.quantity || 0,
+                    subtotal: product.subtotal || 0,
+                    specialDiscount: product.specialDiscount || 0,
+                    discount: product.discount || 0,
+                    taxRate: product.taxRate || 0,
+                    taxType: product.taxType || 'exclusive',
+                })),
+                baseTotal: newSale.baseTotal || 0,
+                grandTotal: newSale.grandTotal || 0,
+                totalPcs: newSale.totalPcs || 0,
+                discount: newSale.discountValue || 0,
+                cashBalance: newSale.cashBalance || 0,
+                paymentStatus: newSale.paymentStatus || saleData.paymentStatus || '',
+                paymentType: saleData.paymentType.map(payment => ({
+                    type: payment.type || 'Unknown',
+                    amount: payment.amount || 0,
+                })),
+                note: receiptSettings.note ? (newSale.note || '') : '',
+                totalSavedAmount: receiptSettings.taxDiscountShipping ?
+                    (totalSavedAmount + newSale.discountValue + newSale.offerValue - newSale.taxValue || 0) :
+                    undefined,
+                barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+            },
+        };
 
     console.log(
       "POS Sale Template Data Debug:",
@@ -2238,52 +2219,46 @@ const printInvoice = async (req, res) => {
       return res.status(404).json({ message: "Sale or settings not found" });
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const logoUrl = settings.logo
-      ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
-      : null;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const logoUrl = settings.logo
+            ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
+            : null;
 
-    const templateData = {
-      settings: {
-        companyName: settings.companyName || "IDEAZONE",
-        companyAddress: settings.address || "Address: XXX-XXX-XXXX",
-        companyMobile: settings.companyMobile || "Phone: XXX-XXX-XXXX",
-        logo: logoUrl,
-      },
-      newSale: {
-        cashierUsername: sale.cashierUsername || "",
-        invoiceNumber: sale.invoiceNumber || "",
-        date: sale.date ? formatDate(sale.date) : "",
-        customer: sale.customer || "",
-        productsData: sale.productsData.map((product) => ({
-          name: product.name,
-          warranty: product.warranty || "",
-          price: product.price,
-          appliedWholesale: product.appliedWholesale,
-          quantity: product.quantity,
-          subtotal: product.subtotal,
-        })),
-        baseTotal: sale.baseTotal || 0,
-        grandTotal: sale.grandTotal,
-        discount: sale.discountValue || 0,
-        cashBalance: sale.cashBalance || 0,
-        paymentType: sale.paymentType,
-        note:
+        const templateData = {
+            settings: {
+                companyName: settings.companyName || 'IDEAZONE',
+                companyAddress: settings.address || 'Address: XXX-XXX-XXXX',
+                companyMobile: settings.companyMobile || 'Phone: XXX-XXX-XXXX',
+                logo: logoUrl,
+            },
+            newSale: {
+                cashierUsername: sale.cashierUsername || '',
+                invoiceNumber: sale.invoiceNumber || '',
+                date: sale.date ? formatDate(sale.date) : '',
+                customer: sale.customer || '',
+                productsData: sale.productsData.map(product => ({
+                    name: product.name,
+                    warranty: product.warranty || '',
+                    price: product.price,
+                    appliedWholesale: product.appliedWholesale,
+                    quantity: product.quantity,
+                    subtotal: product.subtotal,
+                    taxRate: product.taxRate || 0,
+                    taxType: product.taxType || 'exclusive',
+                })),
+                baseTotal: sale.baseTotal || 0,
+                grandTotal: sale.grandTotal,
+                discount: sale.discountValue || 0,
+                cashBalance: sale.cashBalance || 0,
+                paymentType: sale.paymentType,
+                note:
           sale.note && sale.note !== "null" && sale.note.trim() !== ""
             ? sale.note
             : "",
         claimedPoints: sale.claimedPoints || 0,
         redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
-      },
-    };
-
-    console.log("Print Invoice Debug:", {
-      saleId: saleId,
-      claimedPoints: sale.claimedPoints || 0,
-      redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
-      customer: sale.customer,
-      grandTotal: sale.grandTotal,
-    });
+            },
+        };
 
     const invoiceTemplate = `
         <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">

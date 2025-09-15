@@ -30,15 +30,66 @@ Handlebars.registerHelper("formatMobile", function (mobileNumber) {
   return mobileNumber;
 });
 
-Handlebars.registerHelper("finalPrice", function (price, discount, taxRate) {
+Handlebars.registerHelper("getDisplayPrice", function (price, discount, taxRate, taxType) {
+  console.log("DEBUG getDisplayPrice PARAMS:", { price, discount, taxRate, taxType });
+  
   if (isNaN(price)) return "0.00";
   const p = parseFloat(price) || 0;
   const d = parseFloat(discount) || 0;
   const t = parseFloat(taxRate) || 0;
+  
+  console.log("DEBUG getDisplayPrice PARSED:", { p, d, t });
+  
+  // Handle undefined/null taxType by defaulting to exclusive
+  const normalizedTaxType = (taxType || 'exclusive').toString().toLowerCase().trim();
+  console.log("DEBUG normalizedTaxType:", normalizedTaxType);
+  
+  if (normalizedTaxType === 'inclusive') {
+    // For inclusive tax: display the final price (price already includes tax)
+    // Just subtract discount
+    const displayPrice = p - d;
+    console.log("DEBUG inclusive display price:", p, "-", d, "=", displayPrice);
+    return displayPrice.toFixed(2);
+  } else {
+    // For exclusive tax: display price after discount AND tax
+    const priceAfterDiscount = p - d;
+    const taxAmount = p * t;
+    const displayPrice = priceAfterDiscount + taxAmount;
+    console.log("DEBUG exclusive display price (after discount + tax):", p, "-", d, "+ tax", taxAmount, "=", displayPrice);
+    return displayPrice.toFixed(2);
+  }
+});
 
-  const finalPrice = p - d + p * t;
+Handlebars.registerHelper("finalPrice", function (price, discount, taxRate, taxType) {
+  console.log("DEBUG finalPrice PARAMS:", { price, discount, taxRate, taxType });
+  
+  if (isNaN(price)) return "0.00";
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const t = parseFloat(taxRate) || 0;
+  
+  console.log("DEBUG finalPrice PARSED:", { p, d, t });
+  
+  let finalPrice;
+  
+  // Handle undefined/null taxType by defaulting to exclusive
+  const normalizedTaxType = (taxType || 'exclusive').toString().toLowerCase().trim();
+  console.log("DEBUG normalizedTaxType:", normalizedTaxType, "Comparison:", normalizedTaxType === 'inclusive');
+  
+  if (normalizedTaxType === 'inclusive') {
+    // For inclusive tax: price already includes tax, just subtract discount
+    finalPrice = p - d;
+    console.log("DEBUG inclusive calculation:", p, "-", d, "=", finalPrice);
+  } else {
+    // For exclusive tax: add tax to the price after discount
+    finalPrice = p - d + (p * t);
+    console.log("DEBUG exclusive calculation:", p, "-", d, "+", "(", p, "*", t, ") =", finalPrice);
+  }
+  
+  console.log("DEBUG final result:", finalPrice.toFixed(2));
   return finalPrice.toFixed(2);
 });
+
 
 // Register sum helper to calculate total of product subtotals
 Handlebars.registerHelper("sum", function (products) {
@@ -355,7 +406,7 @@ const template = Handlebars.compile(`
                             </div>
                         </div>
                         <div class="col-quantity">{{this.quantity}} pcs</div>
-                        <div class="col-price">{{formatCurrency (finalPrice this.price this.discount this.taxRate)}}</div>                        
+                        <div class="col-price">{{formatCurrency (getDisplayPrice this.price this.discount this.taxRate this.taxType)}}</div>                        
                         <div class="col-discount">{{formatCurrency (multiply this.specialDiscount this.quantity)}}</div>
                         <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
                     </div>

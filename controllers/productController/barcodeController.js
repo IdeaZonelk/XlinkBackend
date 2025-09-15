@@ -94,6 +94,7 @@ const searchProductByName = async (req, res) => {
                 productCost: selectedWarehouseData.productCost || productObj.productCost,
                 ptype: productObj.ptype,
                 discount: selectedWarehouseData.discount || productObj.discount,
+                taxType: selectedWarehouseData.taxType || productObj.taxType,
                 orderTax: selectedWarehouseData.orderTax || productObj.orderTax,
                 productQty: selectedWarehouseData.productQty || productObj.productQty,
                 variationValues: selectedWarehouseData.variationValues || {},
