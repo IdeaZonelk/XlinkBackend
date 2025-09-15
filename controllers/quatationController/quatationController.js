@@ -174,6 +174,11 @@ const findQuatationById = async (req, res) => {
                     discount: productData.discount,
                     quantity: productData.quantity,
                     stockQty,
+                      taxType: (
+        productData.variationValue && selectedWarehouse.variationValues
+            ? selectedWarehouse.variationValues.get(productData.variationValue)?.taxType
+            : selectedWarehouse.taxType
+    ),
                     taxRate: productData.taxRate,
                     subtotal: productData.subtotal,
                     warehouse: productData.warehouse,
