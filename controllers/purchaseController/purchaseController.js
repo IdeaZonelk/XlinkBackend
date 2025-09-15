@@ -52,88 +52,199 @@ const createPurchase = async (req, res) => {
         purchaseData.paymentType = purchaseData.paymentType || 'cash';
         purchaseData.orderStatus = purchaseData.orderStatus || 'ordered';
 
+                purchaseData.productsData = purchaseData.productsData.map(product => ({
+            ...product,
+            originalPurchaseQty: Number(product.quantity) || 0, // Set to actual quantity instead of 0
+            returnQty: 0 // Initialize returnQty to 0
+        }));
+
         const newPruchase = new Purchase(purchaseData);
-        const productsData = purchaseData.productsData; // Extracting productsData from the sale data
+        const productsData = purchaseData.productsData;
 
-        // Prepare update promises for product quantities
-        const updatePromises = productsData.map(async (product) => {
-            const { currentID, ptype } = product;
-            const quantity = Number(product.quantity); // Convert quantity to a number
-
-            // Validate the current ID
-            if (!mongoose.Types.ObjectId.isValid(currentID)) {
-                return res.status(404).json({ message: `Invalid product ID: ${currentID}`, status: 'unsuccess' });
+        // Group products by their ID to handle multiple variations of the same product
+        const productGroups = {};
+        productsData.forEach(product => {
+            if (!productGroups[product.currentID]) {
+                productGroups[product.currentID] = [];
             }
-
-            // Check for valid quantity
-            if (isNaN(quantity) || quantity < 0) {
-                return res.status(400).json({ message: `Invalid Product Quantity for Product Id:  ${currentID}`, status: 'unsuccess' });
-            }
-
-            // Check for valid quantity
-            if (typeof quantity !== 'number' || quantity < 0) {
-                return res.status(400).json({ message: `Invalid Product Quantity for Product Id:  ${currentID}`, status: 'unsuccess' });
-            }
-
-            // Update logic based on product type
-            if (ptype === 'Single') {
-                // For Single products, reduce productQty by the purchasing quantity
-                const updatedProduct = await Product.findById(currentID);
-                if (!updatedProduct) {
-                    return res.status(400).json({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
-                const warehouseKey = purchaseData.warehouse;
-                const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-
-                if (!SelectedWarehouse) {
-                    return res.status(400).json({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
-                SelectedWarehouse.productQty += quantity;
-                await updatedProduct.save();
-                return updatedProduct; // Return updated single product
-            } else if (ptype === 'Variation') {
-                // For Variation products, update the quantity in variationValues
-                const updatedProduct = await Product.findById(currentID);
-                if (!updatedProduct) {
-                    return res.status(400).json({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
-                }
-
-                const warehouseKey = purchaseData.warehouse;
-                const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-
-                if (!SelectedWarehouse) {
-                    return res.status(400).json({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
-                }
-                // Assuming you have a field to identify the specific variation
-                const variationKey = product.variationValue;
-                const variation = SelectedWarehouse.variationValues.get(variationKey);
-                if (!variation) {
-                    return res.status(400).json({ message: `Variation ${variationKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
-                }
-                variation.productQty += quantity;
-                updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
-                await updatedProduct.save();
-
-                return updatedProduct; // Return updated variation product
-            } else {
-                return res.status(400).json({ message: `Invalid product type for product with ID: ${currentID}`, status: 'unsuccess' });
-            }
+            productGroups[product.currentID].push(product);
         });
 
-        // Wait for all product updates to complete
-        await Promise.all(updatePromises);
+        // Process each product group (same product ID) together
+        for (const productId in productGroups) {
+            const products = productGroups[productId];
+            const firstProduct = products[0];
+            
+            if (!mongoose.Types.ObjectId.isValid(productId)) {
+                return res.status(404).json({ message: `Invalid product ID: ${productId}`, status: 'unsuccess' });
+            }
 
-        // Save the sale after updating product quantities
+            const updatedProduct = await Product.findById(productId);
+            if (!updatedProduct) {
+                return res.status(400).json({ message: `Product not found with ID: ${productId}`, status: 'unsuccess' });
+            }
+
+            const warehouseKey = purchaseData.warehouse;
+            const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+
+            if (!selectedWarehouse) {
+                return res.status(400).json({ message: `Warehouse ${warehouseKey} not found for product with ID: ${productId}`, status: 'unsuccess' });
+            }
+
+            // Process all variations for this product
+            for (const product of products) {
+                const quantity = Number(product.quantity);
+
+                if (isNaN(quantity) || quantity < 0) {
+                    return res.status(400).json({ message: `Invalid Product Quantity for Product Id: ${productId}`, status: 'unsuccess' });
+                }
+
+                if (firstProduct.ptype === 'Single') {
+                    selectedWarehouse.productQty += quantity;
+                } else if (firstProduct.ptype === 'Variation') {
+                    const variationKey = product.variationValue;
+                    const variation = selectedWarehouse.variationValues.get(variationKey);
+                    if (!variation) {
+                        return res.status(400).json({ message: `Variation ${variationKey} not found for product with ID: ${productId}`, status: 'unsuccess' });
+                    }
+                    variation.productQty += quantity;
+                } else {
+                    return res.status(400).json({ message: `Invalid product type for product with ID: ${productId}`, status: 'unsuccess' });
+                }
+            }
+
+            // Mark the warehouse as modified
+            updatedProduct.markModified(`warehouse.${warehouseKey}`);
+            await updatedProduct.save();
+        }
+
+        // Save the purchase after updating product quantities
         await newPruchase.save();
         await session.commitTransaction();
         res.status(201).json({ message: 'Purchase saved successfully!', purchase: newPruchase });
     } catch (error) {
         console.error('Error saving Purchase:', error);
+        await session.abortTransaction();
         res.status(500).json({ message: 'Error saving Purchase', error: error.message });
+    } finally {
+        session.endSession();
     }
 };
+// const createPurchase = async (req, res) => {
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+//     try {
+//         const purchaseData = req.body;
+
+//         // Generate a reference ID for the sale
+//         const refferenceId = await generateReferenceId('PURCHASE');
+//         purchaseData.refferenceId = refferenceId;
+
+//         // Validation checks using isEmpty
+//         if (isEmpty(purchaseData.warehouse)) {
+//             return res.status(400).json({ message: 'Warehouse is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(purchaseData.supplier)) {
+//             return res.status(400).json({ message: 'Supplier is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(purchaseData.date)) {
+//             return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(purchaseData.paymentStatus)) {
+//             return res.status(400).json({ message: 'Payment Status is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(purchaseData.orderStatus)) {
+//             return res.status(400).json({ message: 'Order Status is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(purchaseData.paymentType)) {
+//             return res.status(400).json({ message: 'Payment Type is required.', status: 'unsuccess' });
+//         }
+
+//         purchaseData.paymentType = purchaseData.paymentType || 'cash';
+//         purchaseData.orderStatus = purchaseData.orderStatus || 'ordered';
+
+//         const newPruchase = new Purchase(purchaseData);
+//         const productsData = purchaseData.productsData; // Extracting productsData from the sale data
+
+//         // Prepare update promises for product quantities
+//         const updatePromises = productsData.map(async (product) => {
+//             const { currentID, ptype } = product;
+//             const quantity = Number(product.quantity); // Convert quantity to a number
+
+//             // Validate the current ID
+//             if (!mongoose.Types.ObjectId.isValid(currentID)) {
+//                 return res.status(404).json({ message: `Invalid product ID: ${currentID}`, status: 'unsuccess' });
+//             }
+
+//             // Check for valid quantity
+//             if (isNaN(quantity) || quantity < 0) {
+//                 return res.status(400).json({ message: `Invalid Product Quantity for Product Id:  ${currentID}`, status: 'unsuccess' });
+//             }
+
+//             // Check for valid quantity
+//             if (typeof quantity !== 'number' || quantity < 0) {
+//                 return res.status(400).json({ message: `Invalid Product Quantity for Product Id:  ${currentID}`, status: 'unsuccess' });
+//             }
+
+//             // Update logic based on product type
+//             if (ptype === 'Single') {
+//                 // For Single products, reduce productQty by the purchasing quantity
+//                 const updatedProduct = await Product.findById(currentID);
+//                 if (!updatedProduct) {
+//                     return res.status(400).json({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 const warehouseKey = purchaseData.warehouse;
+//                 const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+
+//                 if (!SelectedWarehouse) {
+//                     return res.status(400).json({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 SelectedWarehouse.productQty += quantity;
+//                 await updatedProduct.save();
+//                 return updatedProduct; // Return updated single product
+//             } else if (ptype === 'Variation') {
+//                 // For Variation products, update the quantity in variationValues
+//                 const updatedProduct = await Product.findById(currentID);
+//                 if (!updatedProduct) {
+//                     return res.status(400).json({ message: `Product not found with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+
+//                 const warehouseKey = purchaseData.warehouse;
+//                 const SelectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+
+//                 if (!SelectedWarehouse) {
+//                     return res.status(400).json({ message: `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+//                 // Assuming you have a field to identify the specific variation
+//                 const variationKey = product.variationValue;
+//                 const variation = SelectedWarehouse.variationValues.get(variationKey);
+//                 if (!variation) {
+//                     return res.status(400).json({ message: `Variation ${variationKey} not found for product with ID: ${currentID}`, status: 'unsuccess' });
+//                 }
+//                 variation.productQty += quantity;
+//                 updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+//                 await updatedProduct.save();
+
+//                 return updatedProduct; // Return updated variation product
+//             } else {
+//                 return res.status(400).json({ message: `Invalid product type for product with ID: ${currentID}`, status: 'unsuccess' });
+//             }
+//         });
+
+//         // Wait for all product updates to complete
+//         await Promise.all(updatePromises);
+
+//         // Save the sale after updating product quantities
+//         await newPruchase.save();
+//         await session.commitTransaction();
+//         res.status(201).json({ message: 'Purchase saved successfully!', purchase: newPruchase });
+//     } catch (error) {
+//         console.error('Error saving Purchase:', error);
+//         res.status(500).json({ message: 'Error saving Purchase', error: error.message });
+//     }
+// };
 
 
 // Delete purchase
@@ -339,68 +450,97 @@ const updatePurchase = async (req, res) => {
         const existingProducts = existingPurchase.productsData;
         const updatedProducts = updateData.productsData;
 
-        // Process product updates
-        await Promise.all(
-            updatedProducts.map(async (product) => {
-                const { currentID, quantity: newQuantity, ptype, variationValue } = product;
+                // Preserve originalPurchaseQty and returnQty from existing products
+        const productsWithOriginalData = updatedProducts.map(updatedProduct => {
+            // Find the corresponding existing product
+            const existingProduct = existingProducts.find(p => 
+                p.currentID === updatedProduct.currentID && 
+                p.variationValue === updatedProduct.variationValue
+            );
+            
+            return {
+                ...updatedProduct,
+                originalPurchaseQty: existingProduct ? existingProduct.quantity : Number(updatedProduct.quantity),
+                returnQty: existingProduct ? existingProduct.returnQty : 0
+            };
+        });
 
-                const existingProduct = existingProducts.find(p => p.currentID === currentID);
+        updateData.productsData = productsWithOriginalData;
+
+        // Group products by ID for batch processing
+        const productGroups = {};
+        updatedProducts.forEach(product => {
+            if (!productGroups[product.currentID]) {
+                productGroups[product.currentID] = [];
+            }
+            productGroups[product.currentID].push(product);
+        });
+
+        // Process each product group
+        for (const productId in productGroups) {
+            const products = productGroups[productId];
+            
+            const updatedProduct = await Product.findById(productId);
+            if (!updatedProduct) {
+                throw new Error(`Invalid product ID: ${productId}`);
+            }
+
+            const warehouseKey = updateData.warehouse || existingPurchase.warehouse;
+            const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+            
+            if (!selectedWarehouse) {
+                throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${productId}`);
+            }
+
+            // Process all variations for this product
+            for (const product of products) {
+                const { quantity: newQuantity, ptype, variationValue } = product;
+                
+                // Find existing product in the original purchase
+                const existingProduct = existingProducts.find(p => 
+                    p.currentID === productId && 
+                    p.variationValue === variationValue
+                );
+                
                 const previousQuantity = existingProduct ? existingProduct.quantity : 0;
                 const quantityDifference = newQuantity - previousQuantity;
 
-                const updatedProduct = await Product.findById(currentID);
-                if (!updatedProduct) {
-                    throw new Error(`Invalid product ID: ${currentID}`);
-                }
-
-                const warehouseKey = updateData.warehouse || existingPurchase.warehouse;
-
                 if (ptype === 'Single') {
-                    const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-                    if (!selectedWarehouse) {
-                        throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
-                    }
                     if (quantityDifference < 0 && selectedWarehouse.productQty < Math.abs(quantityDifference)) {
-                        throw new Error(`Insufficient stock for product ID: ${currentID}`);
+                        throw new Error(`Insufficient stock for product ID: ${productId}`);
                     }
-                    selectedWarehouse.productQty += quantityDifference; // Add or subtract based on the difference
+                    selectedWarehouse.productQty += quantityDifference;
                 } else if (ptype === 'Variation') {
-                    const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
-                    if (!selectedWarehouse) {
-                        throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
-                    }
                     const variation = selectedWarehouse.variationValues.get(variationValue);
                     if (!variation) {
-                        throw new Error(`Variation ${variationValue} not found for product ID: ${currentID}`);
+                        throw new Error(`Variation ${variationValue} not found for product ID: ${productId}`);
                     }
                     if (quantityDifference < 0 && variation.productQty < Math.abs(quantityDifference)) {
-                        throw new Error(`Insufficient variation stock for product ID: ${currentID}`);
+                        throw new Error(`Insufficient variation stock for product ID: ${productId}`);
                     }
-                    variation.productQty += quantityDifference; // Add or subtract based on the difference
-                    updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+                    variation.productQty += quantityDifference;
                 } else {
-                    throw new Error(`Invalid product type for product ID: ${currentID}`);
+                    throw new Error(`Invalid product type for product ID: ${productId}`);
                 }
-                await updatedProduct.save();
-            })
-        );
+            }
+
+            // Mark the warehouse as modified
+            updatedProduct.markModified(`warehouse.${warehouseKey}`);
+            await updatedProduct.save();
+        }
 
         // Update the purchase document
         const updatedFields = {
-            ...updateData, // Incoming update data
-            warehouse: existingPurchase.warehouse, // Preserve existing warehouse
-            supplier: existingPurchase.supplier, // Preserve existing supplier
+            ...updateData,
+            warehouse: existingPurchase.warehouse,
+            supplier: existingPurchase.supplier,
         };
-
-        console.log('Updated Fields for Purchase:', JSON.stringify(updatedFields, null, 2));
 
         const updatedPurchase = await Purchase.findByIdAndUpdate(
             purchaseID,
             updatedFields,
-            { new: true, runValidators: true } // Return updated document and validate
+            { new: true, runValidators: true }
         );
-
-        console.log('Updated Purchase Document:', JSON.stringify(updatedPurchase, null, 2));
 
         await session.commitTransaction();
         res.status(200).json({
@@ -415,6 +555,111 @@ const updatePurchase = async (req, res) => {
         session.endSession();
     }
 };
+// const updatePurchase = async (req, res) => {
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+//     try {
+//         const purchaseID = req.params.id; 
+//         const updateData = req.body; 
+
+//         // Validation checks
+//         if (isEmpty(updateData.date)) {
+//             return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(updateData.paymentStatus)) {
+//             return res.status(400).json({ message: 'Payment Status is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(updateData.orderStatus)) {
+//             return res.status(400).json({ message: 'Order Status is required.', status: 'unsuccess' });
+//         }
+//         if (isEmpty(updateData.paymentType)) {
+//             return res.status(400).json({ message: 'Payment Type is required.', status: 'unsuccess' });
+//         }
+
+//         const existingPurchase = await Purchase.findById(purchaseID);
+//         if (!existingPurchase) {
+//             return res.status(404).json({ message: 'Purchase not found' });
+//         }
+
+//         const existingProducts = existingPurchase.productsData;
+//         const updatedProducts = updateData.productsData;
+
+//         // Process product updates
+//         await Promise.all(
+//             updatedProducts.map(async (product) => {
+//                 const { currentID, quantity: newQuantity, ptype, variationValue } = product;
+
+//                 const existingProduct = existingProducts.find(p => p.currentID === currentID);
+//                 const previousQuantity = existingProduct ? existingProduct.quantity : 0;
+//                 const quantityDifference = newQuantity - previousQuantity;
+
+//                 const updatedProduct = await Product.findById(currentID);
+//                 if (!updatedProduct) {
+//                     throw new Error(`Invalid product ID: ${currentID}`);
+//                 }
+
+//                 const warehouseKey = updateData.warehouse || existingPurchase.warehouse;
+
+//                 if (ptype === 'Single') {
+//                     const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+//                     if (!selectedWarehouse) {
+//                         throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
+//                     }
+//                     if (quantityDifference < 0 && selectedWarehouse.productQty < Math.abs(quantityDifference)) {
+//                         throw new Error(`Insufficient stock for product ID: ${currentID}`);
+//                     }
+//                     selectedWarehouse.productQty += quantityDifference; // Add or subtract based on the difference
+//                 } else if (ptype === 'Variation') {
+//                     const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+//                     if (!selectedWarehouse) {
+//                         throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
+//                     }
+//                     const variation = selectedWarehouse.variationValues.get(variationValue);
+//                     if (!variation) {
+//                         throw new Error(`Variation ${variationValue} not found for product ID: ${currentID}`);
+//                     }
+//                     if (quantityDifference < 0 && variation.productQty < Math.abs(quantityDifference)) {
+//                         throw new Error(`Insufficient variation stock for product ID: ${currentID}`);
+//                     }
+//                     variation.productQty += quantityDifference; // Add or subtract based on the difference
+//                     updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+//                 } else {
+//                     throw new Error(`Invalid product type for product ID: ${currentID}`);
+//                 }
+//                 await updatedProduct.save();
+//             })
+//         );
+
+//         // Update the purchase document
+//         const updatedFields = {
+//             ...updateData, // Incoming update data
+//             warehouse: existingPurchase.warehouse, // Preserve existing warehouse
+//             supplier: existingPurchase.supplier, // Preserve existing supplier
+//         };
+
+//         console.log('Updated Fields for Purchase:', JSON.stringify(updatedFields, null, 2));
+
+//         const updatedPurchase = await Purchase.findByIdAndUpdate(
+//             purchaseID,
+//             updatedFields,
+//             { new: true, runValidators: true } // Return updated document and validate
+//         );
+
+//         console.log('Updated Purchase Document:', JSON.stringify(updatedPurchase, null, 2));
+
+//         await session.commitTransaction();
+//         res.status(200).json({
+//             message: 'Purchase updated successfully',
+//             purchase: updatedPurchase,
+//         });
+//     } catch (error) {
+//         console.error('Error updating Purchase return:', error.message);
+//         await session.abortTransaction();
+//         res.status(500).json({ message: 'Failed to update Purchase return', error: error.message });
+//     } finally {
+//         session.endSession();
+//     }
+// };
 
 const fetchPaymentByPurchaseId = async (req, res) => {
     const { purchaseId } = req.params;
