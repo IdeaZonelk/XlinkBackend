@@ -618,6 +618,7 @@ const getAdminPasswordForDiscount = async (req, res) => {
 };
 
 const saveZReading = async (req, res) => {
+    const closedTime = new Date();
     try {
         const records = Array.isArray(req.body) ? req.body : [req.body];
 
@@ -631,7 +632,7 @@ const saveZReading = async (req, res) => {
         const failedRecords = [];
 
         for (const [index, record] of records.entries()) {
-            const requiredFields = ['cashRegisterID', 'cashierName', 'openedTime', 'totalAmount', 'grandTotal', 'closedTime'];
+            const requiredFields = ['cashRegisterID', 'cashierName', 'openedTime', 'totalAmount', 'grandTotal'];
             const missingFields = requiredFields.filter(field =>
                 record[field] === undefined || record[field] === null || record[field] === ''
             );
@@ -664,7 +665,7 @@ const saveZReading = async (req, res) => {
                 grandTotal: Number(record.grandTotal),
                 cashHandIn: Number(record.cashHandIn) || 0,
                 cashVariance: Number(record.cashVariance) || 0,
-                closedTime: record.closedTime
+                closedTime: closedTime,
             });
         }
 
@@ -704,19 +705,90 @@ const saveZReading = async (req, res) => {
 
 const getAllZReadingDetails = async (req, res) => {
     try {
-        const zReadings = await ZReading.find().sort({ createdAt: -1 });
+        console.log("Received query parameters:", req.query);
+
+        // Extract page and size from nested object
+        const page = parseInt(req.query.page?.number, 10) || 1;
+        const size = parseInt(req.query.page?.size, 10) || 10;
+
+        console.log(`Parsed values -> Page: ${page}, Size: ${size}`);
+
+        const offset = (page - 1) * size;
+
+        // Fetch paginated data sorted by createdAt descending (latest first)
+        const zReadingDetails = await ZReading.find()
+            .sort({ _id: -1 }) // latest first
+            .skip(offset)
+            .limit(size)
+            .lean(); // plain JS objects for modification
+
+        const totalZReadings = await ZReading.countDocuments();
+
+        console.log(`Total Records: ${totalZReadings}, Records Returned: ${zReadingDetails.length}`);
+
+        if (!zReadingDetails.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'No Z-readings found'
+            });
+        }
+
+        // Format openedTime and closedTime
+        const formattedZReadings = zReadingDetails.map(z => {
+            // Safety check: ensure registers array exists before mapping
+            if (z.registers && Array.isArray(z.registers)) {
+                z.registers = z.registers.map(r => {
+                    if (r.openedTime) {
+                        const openDate = new Date(r.openedTime);
+                        const day = String(openDate.getDate()).padStart(2, '0');
+                        const month = String(openDate.getMonth() + 1).padStart(2, '0');
+                        const year = openDate.getFullYear();
+                        const hours = String(openDate.getHours()).padStart(2, '0');
+                        const minutes = String(openDate.getMinutes()).padStart(2, '0');
+                        const seconds = String(openDate.getSeconds()).padStart(2, '0');
+
+                        r.openedTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                    }
+
+                    // Format closedTime (convert to Sri Lanka Time +05:30)
+                    if (r.closedTime) {
+                        const closeDate = new Date(r.closedTime);
+                        const slTime = new Date(closeDate.getTime() + 5.5 * 60 * 60 * 1000);
+                        const day = String(slTime.getUTCDate()).padStart(2, '0');
+                        const month = String(slTime.getUTCMonth() + 1).padStart(2, '0');
+                        const year = slTime.getUTCFullYear();
+                        const hours = String(slTime.getUTCHours()).padStart(2, '0');
+                        const minutes = String(slTime.getUTCMinutes()).padStart(2, '0');
+                        const seconds = String(slTime.getUTCSeconds()).padStart(2, '0');
+
+                        r.closedTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                    }
+
+                    return r;
+                });
+            } else {
+                // If registers doesn't exist or isn't an array, initialize as empty array
+                console.warn(`Z-reading document ${z._id} has no registers array`);
+                z.registers = [];
+            }
+            return z;
+        });
 
         res.status(200).json({
             success: true,
-            count: zReadings.length,
-            data: zReadings
+            data: formattedZReadings,
+            currentPage: page,
+            totalPages: Math.ceil(totalZReadings / size),
+            totalItems: totalZReadings,
+            message: 'Z-reading details retrieved successfully'
         });
+
     } catch (error) {
-        console.error('Error fetching ZReadings:', error);
+        console.error('Error retrieving Z-reading details:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to fetch ZReadings',
-            errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            message: 'Server error',
+            error: error.message
         });
     }
 };
@@ -724,6 +796,7 @@ const getAllZReadingDetails = async (req, res) => {
 const getAllZReadingByDate = async (req, res) => {
     try {
         const { date } = req.query;
+
         if (!date) {
             return res.status(400).json({
                 success: false,
@@ -741,7 +814,8 @@ const getAllZReadingByDate = async (req, res) => {
                 $lt: endDate
             }
         };
-        const zReadingDetails = await ZReading.find(query);
+
+        let zReadingDetails = await ZReading.find(query);
 
         if (!zReadingDetails.length) {
             return res.status(404).json({
@@ -749,6 +823,44 @@ const getAllZReadingByDate = async (req, res) => {
                 message: 'No Z-readings found'
             });
         }
+
+        // Convert openedTime and closedTime to Sri Lanka timezone format: dd/mm/yyyy hh:mm:ss
+        zReadingDetails = zReadingDetails.map(zReading => {
+            const updatedRegisters = zReading.registers.map(register => {
+                const openedTimeSLT = new Date(register.openedTime).toLocaleString('en-GB', {
+                    timeZone: 'Asia/Colombo',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).replace(',', '');
+
+                const closedTimeSLT = new Date(register.closedTime).toLocaleString('en-GB', {
+                    timeZone: 'Asia/Colombo',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).replace(',', '');
+
+                return {
+                    ...register._doc,
+                    openedTime: openedTimeSLT,
+                    closedTime: closedTimeSLT
+                };
+            });
+
+            return {
+                ...zReading._doc,
+                registers: updatedRegisters
+            };
+        });
 
         res.status(200).json({
             success: true,

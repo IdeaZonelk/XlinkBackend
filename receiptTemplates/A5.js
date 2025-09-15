@@ -1,4 +1,5 @@
 const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 
 Handlebars.registerHelper("formatCurrency", function (number) {
   if (isNaN(number)) return "0.00";
@@ -123,14 +124,9 @@ Handlebars.registerHelper("multiply", function (a, b) {
 
 const formatDate = (date) => {
   if (!date) return "";
-  const d = new Date(date);
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 const template = Handlebars.compile(`
@@ -378,8 +374,7 @@ const template = Handlebars.compile(`
                     <!-- Left: Invoice Meta Data -->
                     <div class="meta-left">
                         <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
-                        <div class="meta-item"><b>Customer</b></div>
-                        <div class="meta-item">{{newSale.customer}}</div>
+                        <div class="meta-item"><b>Customer:</b> {{newSale.customerName}}</div>
                         <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
                     </div>
 
@@ -454,6 +449,10 @@ const template = Handlebars.compile(`
                             <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
                         </div>
                         <div class="summary-row">
+                            <span><b>Claimed Points:</b></span>
+                            <span>{{newSale.claimedPoints}}</span>
+                        </div>
+                        <div class="summary-row">
                             <span><b>Discount:</b></span>
                             <span>(-) Rs {{formatCurrency newSale.discount}}</span>
                         </div>
@@ -471,6 +470,14 @@ const template = Handlebars.compile(`
                     </p>
                 </div>
                 {{/if}}
+
+                <!-- Footer Message -->
+                <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+                    <p style="margin: 5px 0;">
+                        <b>THANK YOU FOR SHOPPING WITH US!</b><br>
+                        Items can be returned within 3 days from the date of purchase, with the original bill.
+                    </p>
+                </div>
 
                 </div>
             </div>

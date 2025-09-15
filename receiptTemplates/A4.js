@@ -1,18 +1,19 @@
-const Handlebars = require('handlebars');
+const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 
-Handlebars.registerHelper('formatCurrency', function (number) {
-    if (isNaN(number)) return '0.00';
-    const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split('.');
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return `${formattedInteger}.${decimalPart}`;
+Handlebars.registerHelper("formatCurrency", function (number) {
+  if (isNaN(number)) return "0.00";
+  const [integerPart, decimalPart] = parseFloat(number).toFixed(2).split(".");
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${formattedInteger}.${decimalPart}`;
 });
 
-Handlebars.registerHelper('countProducts', function (products) {
-    return products?.length || 0;
+Handlebars.registerHelper("countProducts", function (products) {
+  return products?.length || 0;
 });
 
-Handlebars.registerHelper('addOne', function (index) {
-    return index + 1;
+Handlebars.registerHelper("addOne", function (index) {
+  return index + 1;
 });
 
 Handlebars.registerHelper("multiply", function (a, b) {
@@ -75,23 +76,14 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate, taxT
     finalPrice = p - d + (p * t);
     console.log("DEBUG exclusive calculation:", p, "-", d, "+", "(", p, "*", t, ") =", finalPrice);
   }
-  
-  console.log("DEBUG final result:", finalPrice.toFixed(2));
   return finalPrice.toFixed(2);
 });
 
-
-
 const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+  if (!date) return "";
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 const template = Handlebars.compile(`
@@ -392,7 +384,7 @@ const template = Handlebars.compile(`
         <!-- Customer Details -->
         <div class="customer-details" style="display:flex; justify-content:space-between;margin-left: 5px; margin-right: 5px">
             <p style="font-size: 14px; margin:0; padding-bottom:1px;">{{newSale.date}}</p>
-            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customer}}</p>
+            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customerName}}</p>
         </div>
 
         <div class="divider"></div>
@@ -437,6 +429,11 @@ const template = Handlebars.compile(`
         <span>Discount:</span>
         <span>{{formatCurrency newSale.discount}}</span>
     </div>
+    <div class="summary-row">
+        <span>Claimed Points:</span>
+        <span>{{newSale.claimedPoints}}</span>
+    </div>
+
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <div class="summary-row">
         <span>Paid Amount : 0.00</span>
@@ -476,7 +473,7 @@ const template = Handlebars.compile(`
 
         <!-- Footer Section -->
         <div class="footer">
-            <p style="text-align: center; font-size: 11px; text-color: #000000;">*** *NO EXCHANGE* *NO CASH REFUND* *NO WARRANTY FOR PHYSICAL BURN MARK, LIGHTING DAMAGE* *** <br/> THANK YOU FOR SHOPPING WITH US!</p>
+            <p style="text-align: center; font-size: 11px; text-color: #000000;">*** *NO EXCHANGE* *NO CASH REFUND* *NO WARRANTY FOR PHYSICAL BURN MARK, LIGHTING DAMAGE* *** <br/> THANK YOU FOR SHOPPING WITH US!<br/>Items can be returned within 3 days from the date of purchase, with the original bill.</p>
             
             <div className="flex justify-start mt-5">
                 <p style="text-left: center; font-size: 12px; margin-left:5px;">Signature  _________________________________</p>
@@ -510,19 +507,19 @@ const template = Handlebars.compile(`
 `);
 
 module.exports = {
-    generateReceiptA4: (data) => {
-        // Format the date before passing to template
-        const formattedData = {
-            ...data,
-            newSale: {
-                ...data.newSale,
-                date: formatDate(new Date()),
-            },
-        };
-        return template(formattedData);
-    },
-    getBarcodeScriptA4: () => {
-        return `
+  generateReceiptA4: (data) => {
+    // Format the date before passing to template
+    const formattedData = {
+      ...data,
+      newSale: {
+        ...data.newSale,
+        date: formatDate(new Date()),
+      },
+    };
+    return template(formattedData);
+  },
+  getBarcodeScriptA4: () => {
+    return `
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -537,5 +534,5 @@ module.exports = {
             });
         </script>
         `;
-    }
+  },
 };

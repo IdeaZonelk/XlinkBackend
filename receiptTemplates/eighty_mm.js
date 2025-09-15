@@ -1,4 +1,5 @@
 const Handlebars = require("handlebars");
+const moment = require("moment-timezone");
 
 Handlebars.registerHelper("formatCurrency", function (number) {
   if (isNaN(number)) return "0.00";
@@ -90,14 +91,9 @@ Handlebars.registerHelper("finalPrice", function (price, discount, taxRate, taxT
 
 const formatDate = (date) => {
   if (!date) return "";
-  const d = new Date(date);
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
+  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
+  return sriLankanTime.format("MMM DD, YYYY HH:mm");
 };
 
 const template = Handlebars.compile(`
@@ -135,7 +131,7 @@ const template = Handlebars.compile(`
                     format: 'CODE128',
                     width: 1.2,
                     height: 30,
-                    fontSize: 14,
+                    fontSize: 13,
                     margin: 5,
                     displayValue: true
                 });
@@ -163,35 +159,35 @@ const template = Handlebars.compile(`
                     object-fit: contain;">
                 </div>
             {{/if}}
-            <p style="margin: 2px 0; font-size: 13px;">{{settings.companyAddress}}</p>
-            <p style="margin: 2px 0; font-size: 13px;">{{settings.companyMobile}}</p>
+            <p style="margin: 1.5px 0; font-size: 12px;">{{settings.companyAddress}}</p>
+            <p style="margin: 1.5px 0; font-size: 12px;">{{settings.companyMobile}}</p>
         </div>
 
         <!-- Transaction Info -->
             <div style="margin-bottom: 10px;">
-                <p style="margin: 3px 0; font-size: 12px;">Salesman: {{newSale.cashierUsername}}</p>
-                <p style="margin: 3px 0; font-size: 12px;">Receipt No: {{newSale.invoiceNumber}}</p>
-                <p style="margin: 3px 0; font-size: 12px;">Date: {{newSale.date}}</p>
-                <p style="margin: 3px 0; font-size: 12px;">Customer: {{newSale.customer}}</p>
+                <p style="margin: 2.5px 0; font-size: 11px;">Salesman: {{newSale.cashierUsername}}</p>
+                <p style="margin: 2.5px 0; font-size: 11px;">Receipt No: {{newSale.invoiceNumber}}</p>
+                <p style="margin: 2.5px 0; font-size: 11px;">Date: {{newSale.date}}</p>
+                <p style="margin: 2.5px 0; font-size: 11px;">Customer: {{newSale.customerName}}</p>
             </div>
 
         <!-- Products Table -->
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
             <thead>
                 <tr>
-                    <th colspan="2" style="text-align: left; font-size: 13px; padding-left:20px ">Price</th>
-                    <th style="text-align: center; font-size: 13px; vertical-align: top; padding-left:20px">Qty</th>
-                    <th style="text-align: center; font-size: 13px; padding-left:5px">Discount</th>
-                    <th style="text-align: right; font-size: 13px; vertical-align: top;">Amount</th>
+                    <th colspan="2" style="text-align: left; font-size: 12px; padding-left:20px ">Price</th>
+                    <th style="text-align: center; font-size: 12px; vertical-align: top; padding-left:20px">Qty</th>
+                    <th style="text-align: center; font-size: 12px; padding-left:5px">Discount</th>
+                    <th style="text-align: right; font-size: 12px; vertical-align: top;">Amount</th>
                 </tr>
             </thead>
         <tbody>
             {{#each newSale.productsData}}
             <tr>
-                <td colspan="5" style="font-size: 13px; font-weight: bold; padding-top: 6px; padding-bottom: 2px;">
+                <td colspan="5" style="font-size: 12px; font-weight: bold; padding-top: 6px; padding-bottom: 2px;">
                     {{addOne @index}}. {{this.name}}
                     {{#if this.warranty}}
-                        <span style="font-size: 11px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
+                        <span style="font-size: 10px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
                         ({{this.warranty}} warranty)
                         </span>
                     {{/if}}
@@ -214,23 +210,28 @@ const template = Handlebars.compile(`
     <tr>
 </tr>
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Total:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Total:</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency newSale.grandTotal}}</td>
     </tr>
 
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Discount:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.discount}}</td>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Discount:</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency newSale.discount}}</td>
     </tr>
-    
+
+    <tr>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
+    </tr>
+
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Paid :</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">0.00</td>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Paid :</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">0.00</td>
     </tr>
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Due :</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency newSale.grandTotal}}</td>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Due :</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency newSale.grandTotal}}</td>
     </tr>
     {{/if}}
     
@@ -238,19 +239,19 @@ const template = Handlebars.compile(`
     <!-- Payment Details Rows -->
     {{#each newSale.paymentType}}
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">
     {{#if (eq this.type "bank_transfer")}}Bank Transfer
     {{else if (eq this.type "cash")}}Cash
     {{else if (eq this.type "card")}}Card
     {{else}}Unknown
     {{/if}}:
   </td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency this.amount}}</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency this.amount}}</td>
     </tr>
     {{/each}}
     <tr>
-        <td colspan="4" style="text-align: right; padding: 2px 0; font-size: 14px;">Balance:</td>
-        <td style="text-align: right; padding: 2px 0; font-size: 14px;">{{formatCurrency (abs newSale.cashBalance)}}</td>
+        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Balance:</td>
+        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency (abs newSale.cashBalance)}}</td>
     </tr>
     {{/unless}}
         </tfoot>
@@ -258,8 +259,8 @@ const template = Handlebars.compile(`
 
     <!-- Notes Section - Updated with text wrapping -->
     {{#if newSale.note}}
-        <div style="margin-bottom:10px; font-size: 12px;  word-wrap: break-word; overflow-wrap: break-word;">
-            <p style="margin-top: 3px; 0; margin-bottom: 3px font-size: 12px; white-space: pre-wrap; word-break: break-word;">
+        <div style="margin-bottom:10px; font-size: 11px;  word-wrap: break-word; overflow-wrap: break-word;">
+            <p style="margin-top: 2.5px; 0; margin-bottom: 2.5px font-size: 11px; white-space: pre-wrap; word-break: break-word;">
             Note:{{newSale.note}}
         </p>
         </div>
@@ -269,7 +270,7 @@ const template = Handlebars.compile(`
 
         {{#if newSale.totalSavedAmount}}
             <hr style="border-top: 1px dashed #000; margin: 8px 0;">
-            <div style="text-align: center; font-size: 20px; font-weight: bold;">
+            <div style="text-align: center; font-size: 19px; font-weight: bold;">
                 ඔබේ ලාභය : {{formatCurrency newSale.totalSavedAmount}}
             </div>
             <hr style="border-top: 1px dashed #000; margin: 8px 0;">
@@ -277,15 +278,16 @@ const template = Handlebars.compile(`
 
 
         <div style="text-align: center; margin-top: 15px; font-size: 0.8em;">
-        <p style="margin: 4px 0;">
-            THANK YOU FOR SHOPPING WITH US!<br><br>
+        <p style="margin: 3.5px 0;">
+            THANK YOU FOR SHOPPING WITH US!<br>
+            Items can be returned within 3 days from the date of purchase, with the original bill.<br><br>
         </p>
 
         <!-- Barcode Section -->
         <div style="text-align: center; margin: 10px 0;">
             <canvas id="barcode-{{newSale.invoiceNumber}}"></canvas>
         </div>
-         <p style="margin: 4px 0;">
+         <p style="margin: 3.5px 0;">
             System by IDEAZONE
         </p>
         </div>
@@ -313,7 +315,7 @@ module.exports = {
                     format: 'CODE128',
                     width: 1.2,
                     height: 30,
-                    fontSize: 14,
+                    fontSize: 13,
                     margin: 5,
                     displayValue: true
                 });

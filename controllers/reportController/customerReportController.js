@@ -38,6 +38,8 @@ const getCustomerReport = async (req, res) => {
                     _id: customer._id,
                     name: customer.name,
                     mobile: customer.mobile,
+                    redeemedPoints: customer.loyalty?.redeemedPoints || 0,
+                    loyaltyReferenceNumber: customer.loyalty?.loyaltyReferenceNumber || 'N/A',
                     sales: sales.map((sale) => ({
                         saleId: sale._id,
                         warehouse: sale.warehouse,
