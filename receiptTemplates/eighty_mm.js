@@ -98,7 +98,6 @@ const formatDate = (date) => {
 
 const template = Handlebars.compile(`
 <div style="font-family: Arial, sans-serif; max-width: 80mm; margin: 0; padding: 10px; border: 1px solid #ccc; position: fixed; left: 0; top: 0;">
-        <!-- Your existing receipt content remains the same -->
             <style>
     @media print {
         body, html {
@@ -219,10 +218,18 @@ const template = Handlebars.compile(`
         <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency newSale.discount}}</td>
     </tr>
 
-    <tr>
-        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
-        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
-    </tr>
+<tr>
+    <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
+</tr>
+
+
+{{#if newSale.redeemedPointsFromSale}}
+<tr>
+    <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Redeemed Points:</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.redeemedPointsFromSale}}</td>
+</tr>
+{{/if}}
 
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <tr>
