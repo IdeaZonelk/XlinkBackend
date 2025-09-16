@@ -1236,6 +1236,7 @@ const findSaleById = async (req, res) => {
           quantity: productData.quantity,
           stockQty,
           taxRate: productData.taxRate,
+          taxType: productData.taxType,
           subtotal: productData.subtotal,
           warehouse: productData.warehouse,
           wholesaleEnabled: productData.wholesaleEnabled,
@@ -1382,39 +1383,41 @@ const updateSale = async (req, res) => {
               );
             }
             selectedWarehouse.productQty -= quantityDifference;
-          } else if (ptype === "Variation") {
-            const selectedWarehouse =
-              updatedProduct.warehouse.get(warehouseKey);
-            if (!selectedWarehouse) {
-              throw new Error(
-                `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`
-              );
-            }
-            const variation =
-              selectedWarehouse.variationValues.get(variationValue);
-            if (!variation) {
-              throw new Error(
-                `Variation ${variationValue} not found for product ID: ${currentID}`
-              );
-            }
-            if (
-              quantityDifference < 0 &&
-              variation.productQty < Math.abs(quantityDifference)
-            ) {
-              throw new Error(
-                `Insufficient variation stock for product ID: ${currentID}`
-              );
-            }
-            variation.productQty -= quantityDifference;
-            updatedProduct.markModified(
-              `warehouse.${warehouseKey}.variationValues`
-            );
-          } else {
-            errors.push(
-              `Invalid product type for product with ID: ${currentID}`
-            );
-            return;
-          }
+          } else if (ptype === 'Variation') {
+                    const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+                    if (!selectedWarehouse) {
+                        throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
+                    }
+                  const productVariations = updatedProducts.filter(
+                        p => p.currentID === currentID && p.ptype === 'Variation'
+                    );
+
+                    productVariations.forEach(variationProduct => {
+                        const variationKey = variationProduct.variationValue;
+                        const newQty = variationProduct.quantity;
+                        const existingVarProduct = existingProducts.find(
+                            ep => ep.currentID === currentID && ep.variationValue === variationKey
+                        );
+                        const prevQty = existingVarProduct ? existingVarProduct.quantity : 0;
+                        const qtyDiff = newQty - prevQty;
+
+                        const variation = selectedWarehouse.variationValues.get(variationKey);
+                        if (!variation) {
+                            errors.push(`Variation ${variationKey} not found for product ID: ${currentID}`);
+                            return;
+                        }
+                        if (qtyDiff < 0 && variation.productQty < Math.abs(qtyDiff)) {
+                            errors.push(`Insufficient variation stock for product ID: ${currentID}, variation: ${variationKey}`);
+                            return;
+                        }
+                        variation.productQty -= qtyDiff;
+                        updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+                    });
+                } else {
+                    errors.push(`Invalid product type for product with ID: ${currentID}`);
+                    return;
+                }
+
 
           // Ensure warehouse update is saved
           updatedProduct.warehouse.set(warehouse, warehouseData);

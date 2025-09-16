@@ -29,6 +29,11 @@ Handlebars.registerHelper("multiply", function (a, b) {
   return (a * b).toFixed(2);
 });
 
+// Add this helper near the other Handlebars helpers
+Handlebars.registerHelper("formatPoints", function (number) {
+  if (isNaN(number)) return "0.00";
+  return parseFloat(number).toFixed(2);
+});
 Handlebars.registerHelper("getDisplayPrice", function (price, discount, taxRate, taxType) {
   console.log("DEBUG getDisplayPrice PARAMS:", { price, discount, taxRate, taxType });
   
@@ -220,14 +225,13 @@ const template = Handlebars.compile(`
 
 <tr>
     <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
-    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatPoints newSale.claimedPoints}}</td>
 </tr>
-
 
 {{#if newSale.redeemedPointsFromSale}}
 <tr>
     <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Redeemed Points:</td>
-    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.redeemedPointsFromSale}}</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatPoints newSale.redeemedPointsFromSale}}</td>
 </tr>
 {{/if}}
 
