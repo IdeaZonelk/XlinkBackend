@@ -477,7 +477,8 @@ const createSale = async (req, res) => {
                 cashierUsername: newSale.cashierUsername || '',
                 invoiceNumber: newSale.invoiceNumber || '',
                 date: formatDate(newSale.date),
-                customer: receiptSettings.customer ? (newSale.customer || '') : '',
+                customer: newSale.customerName || newSale.customer || 'Unknown',
+                customerName: newSale.customerName || 'Unknown',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
                     price: product.applicablePrice || 0,
