@@ -104,6 +104,11 @@ Handlebars.registerHelper("subtract", function (a, b) {
   return (a || 0) - (b || 0);
 });
 
+Handlebars.registerHelper("formatPoints", function (number) {
+  if (isNaN(number)) return "0.00";
+  return parseFloat(number).toFixed(2);
+});
+
 // Register formatMobile helper (from previous error)
 Handlebars.registerHelper("formatMobile", function (mobileNumber) {
   if (!mobileNumber) return "N/A";
@@ -448,10 +453,10 @@ const template = Handlebars.compile(`
                             <span><b>Subtotal:</b></span>
                             <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
                         </div>
-                        <div class="summary-row">
-                            <span><b>Claimed Points:</b></span>
-                            <span>{{newSale.claimedPoints}}</span>
-                        </div>
+                    <div class="summary-row">
+    <span><b>Claimed Points:</b></span>
+    <span>{{formatPoints newSale.claimedPoints}}</span>
+</div>
                         <div class="summary-row">
                             <span><b>Discount:</b></span>
                             <span>(-) Rs {{formatCurrency newSale.discount}}</span>
