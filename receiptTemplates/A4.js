@@ -384,7 +384,7 @@ const template = Handlebars.compile(`
         <!-- Customer Details -->
         <div class="customer-details" style="display:flex; justify-content:space-between;margin-left: 5px; margin-right: 5px">
             <p style="font-size: 14px; margin:0; padding-bottom:1px;">{{newSale.date}}</p>
-            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customerName}}</p>
+            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customer}}</p>
         </div>
 
         <div class="divider"></div>
