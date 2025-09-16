@@ -26,7 +26,7 @@ const ZReadingSchema = new mongoose.Schema({
       required: true
     },
     openedTime: {
-      type: Date,
+      type: String,
       required: true
     },
     inputs: [{
