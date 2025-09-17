@@ -143,16 +143,6 @@ const createSale = async (req, res) => {
 
     const newSale = new Sale(saleData);
 
-    // Calculate and add earned loyalty points to the sale record
-    const earnedLoyaltyPointsForSave =
-      saleData.customer && saleData.customer !== "Unknown"
-        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
-        : 0;
-
-    // Fixed: The redeemedPointsFromSale is already calculated on frontend, no need to add earned points again
-    // newSale.redeemedPointsFromSale =
-    //   (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
-
     const productsData = saleData.productsData;
 
     // Prepare update promises for product quantities
@@ -375,16 +365,13 @@ const createSale = async (req, res) => {
 
       // Calculate 1% loyalty points from sale total
       const saleTotal = saleData.grandTotal || 0;
-      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
 
       // Update customer points if there are any point transactions or if customer exists for earning points
-      if (
-        claimedPoints > 0 ||
-        redeemedPointsFromSale > 0 ||
-        (earnedLoyaltyPoints > 0 &&
-          saleData.customer &&
-          saleData.customer !== "Unknown")
-      ) {
+     if (
+    claimedPoints > 0 ||
+    redeemedPointsFromSale > 0 ||
+    (saleData.customer && saleData.customer !== "Unknown")
+) {
         if (saleData.customer && saleData.customer !== "Unknown") {
           let customer;
 
@@ -474,7 +461,6 @@ const createSale = async (req, res) => {
     console.log("POS Sale Loyalty Points Debug:", {
       claimedPoints: saleData.claimedPoints || 0,
       redeemedPointsFromSale: saleData.redeemedPointsFromSale || 0,
-      earnedLoyaltyPoints: earnedLoyaltyPoints,
       displayRedeemedPoints: displayRedeemedPoints,
       customer: saleData.customer,
       grandTotal: saleData.grandTotal,
@@ -491,7 +477,8 @@ const createSale = async (req, res) => {
                 cashierUsername: newSale.cashierUsername || '',
                 invoiceNumber: newSale.invoiceNumber || '',
                 date: formatDate(newSale.date),
-                customer: receiptSettings.customer ? (newSale.customer || '') : '',
+                customer: newSale.customerName || newSale.customer || 'Unknown',
+                customerName: newSale.customerName || 'Unknown',
                 productsData: saleData.productsData.map(product => ({
                     name: product.name || 'Unnamed Product',
                     price: product.applicablePrice || 0,
@@ -518,6 +505,8 @@ const createSale = async (req, res) => {
                     (totalSavedAmount + newSale.discountValue + newSale.offerValue - newSale.taxValue || 0) :
                     undefined,
                 barcode: receiptSettings.barcode ? newSale.invoiceNumber : undefined,
+        claimedPoints: saleData.claimedPoints || 0,
+        redeemedPointsFromSale: saleData.redeemedPointsFromSale || 0,
             },
         };
 
@@ -527,7 +516,6 @@ const createSale = async (req, res) => {
         {
           claimedPoints: templateData.newSale.claimedPoints,
           redeemedPointsFromSale: templateData.newSale.redeemedPointsFromSale,
-          earnedLoyaltyPoints: earnedLoyaltyPoints,
           customer: saleData.customer,
           template: newSale.receiptSize || receiptSettings.template,
         },
@@ -663,15 +651,6 @@ const createNonPosSale = async (req, res) => {
 
     const newSale = new Sale(saleData);
 
-    // Calculate and add earned loyalty points to the sale record
-    const earnedLoyaltyPointsForSave =
-      saleData.customer && saleData.customer !== "Unknown"
-        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
-        : 0;
-
-    // Fixed: The redeemedPointsFromSale is already calculated on frontend, no need to add earned points again
-    // newSale.redeemedPointsFromSale =
-    //   (saleData.redeemedPointsFromSale || 0) + earnedLoyaltyPointsForSave;
 
     const productsData = saleData.productsData;
 
@@ -764,65 +743,60 @@ const createNonPosSale = async (req, res) => {
     await newSale.save();
 
     /** Loyalty points update **/
-    try {
-      const claimedPoints = saleData.claimedPoints || 0;
-      const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
+   // Update customer loyalty points (if applicable)
+try {
+    const claimedPoints = saleData.claimedPoints || 0;
+    const redeemedPointsFromSale = saleData.redeemedPointsFromSale || 0;
 
-      // Calculate 1% loyalty points from sale total
-      const saleTotal = saleData.grandTotal || 0;
-      const earnedLoyaltyPoints = parseFloat((saleTotal * 0.01).toFixed(2)); // 1% of sale total, rounded down
-
-      if (
-        (claimedPoints > 0 ||
-          redeemedPointsFromSale > 0 ||
-          (earnedLoyaltyPoints > 0 &&
-            saleData.customer &&
-            saleData.customer !== "Unknown")) &&
-        saleData.customer &&
-        saleData.customer !== "Unknown"
-      ) {
+    // Update customer points if there are any point transactions or if customer exists for earning points
+    if (
+        claimedPoints > 0 ||
+        redeemedPointsFromSale > 0 ||
+        (saleData.customer && saleData.customer !== "Unknown")
+    ) {
         let customer;
+        
+        // Find customer by ID or name
         if (mongoose.Types.ObjectId.isValid(saleData.customer)) {
-          customer = await Customers.findById(saleData.customer);
-        }
-        if (!customer) {
-          customer = await Customers.findOne({ name: saleData.customer });
+            customer = await Customers.findById(saleData.customer);
+        } else {
+            customer = await Customers.findOne({ name: saleData.customer });
         }
 
         if (customer) {
-          if (!customer.loyalty) {
-            customer.loyalty = {
-              loyaltyReferenceNumber: `CUST-${customer._id
-                .toString()
-                .slice(-6)}`,
-              redeemedPoints: 0,
-            };
-          }
+            if (!customer.loyalty) {
+                customer.loyalty = {
+                    loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+                    redeemedPoints: 0,
+                };
+            }
 
-          const currentRedeemedPoints =
-            parseFloat(customer.loyalty.redeemedPoints) || 0;
-          if (claimedPoints > currentRedeemedPoints) {
-            console.warn(
-              `Claimed points exceed available for ${customer.name}`
+            const currentRedeemedPoints = parseFloat(customer.loyalty.redeemedPoints) || 0;
+
+            if (claimedPoints > currentRedeemedPoints) {
+                console.warn(
+                    `Claimed points (${claimedPoints}) exceed available points (${currentRedeemedPoints}) for customer ${customer.name}`
+                );
+            }
+
+            // Calculate new points: current points - claimed points + redeemed points
+            const newRedeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + redeemedPointsFromSale;
+
+            customer.loyalty.redeemedPoints = newRedeemedPoints;
+            await customer.save();
+
+            console.log(
+                `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints} (Claimed: ${claimedPoints}, Redeemed from Sale: ${redeemedPointsFromSale})`
             );
-          }
-
-          // Calculate new points: current points - claimed points + redeemed points
-          // Note: redeemedPointsFromSale already contains the calculated loyalty points from frontend
-          customer.loyalty.redeemedPoints =
-            Math.max(0, currentRedeemedPoints - claimedPoints) +
-            redeemedPointsFromSale;
-          await customer.save();
-
-          console.log(
-            `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${customer.loyalty.redeemedPoints} (Claimed: ${claimedPoints}, Redeemed from Sale: ${redeemedPointsFromSale})`
-          );
+        } else {
+            console.warn(
+                `Customer ${saleData.customer} not found for points update`
+            );
         }
-      }
-    } catch (pointsError) {
-      console.error("Error updating customer loyalty points:", pointsError);
     }
-
+} catch (pointsError) {
+    console.error("Error updating customer loyalty points:", pointsError);
+}
     /** Payment records update **/
     try {
       if (newSale.paymentStatus === "partial" && newSale.paidAmount > 0) {
@@ -862,19 +836,12 @@ const createNonPosSale = async (req, res) => {
       return sum + saved + product.specialDiscount;
     }, 0);
 
-    // Calculate earned loyalty points for receipt display
-    const earnedLoyaltyPoints =
-      saleData.customer && saleData.customer !== "Unknown"
-        ? parseFloat(((saleData.grandTotal || 0) * 0.01).toFixed(2))
-        : 0;
-
     // Use redeemedPointsFromSale directly for display (already calculated on frontend)
     const displayRedeemedPoints = saleData.redeemedPointsFromSale || 0;
 
     console.log("Non-POS Sale Loyalty Points Debug:", {
       claimedPoints: saleData.claimedPoints || 0,
       redeemedPointsFromSale: saleData.redeemedPointsFromSale || 0,
-      earnedLoyaltyPoints: earnedLoyaltyPoints,
       displayRedeemedPoints: displayRedeemedPoints,
       customer: saleData.customer,
     });
@@ -1269,6 +1236,7 @@ const findSaleById = async (req, res) => {
           quantity: productData.quantity,
           stockQty,
           taxRate: productData.taxRate,
+          taxType: productData.taxType,
           subtotal: productData.subtotal,
           warehouse: productData.warehouse,
           wholesaleEnabled: productData.wholesaleEnabled,
@@ -1415,39 +1383,41 @@ const updateSale = async (req, res) => {
               );
             }
             selectedWarehouse.productQty -= quantityDifference;
-          } else if (ptype === "Variation") {
-            const selectedWarehouse =
-              updatedProduct.warehouse.get(warehouseKey);
-            if (!selectedWarehouse) {
-              throw new Error(
-                `Warehouse ${warehouseKey} not found for product with ID: ${currentID}`
-              );
-            }
-            const variation =
-              selectedWarehouse.variationValues.get(variationValue);
-            if (!variation) {
-              throw new Error(
-                `Variation ${variationValue} not found for product ID: ${currentID}`
-              );
-            }
-            if (
-              quantityDifference < 0 &&
-              variation.productQty < Math.abs(quantityDifference)
-            ) {
-              throw new Error(
-                `Insufficient variation stock for product ID: ${currentID}`
-              );
-            }
-            variation.productQty -= quantityDifference;
-            updatedProduct.markModified(
-              `warehouse.${warehouseKey}.variationValues`
-            );
-          } else {
-            errors.push(
-              `Invalid product type for product with ID: ${currentID}`
-            );
-            return;
-          }
+          } else if (ptype === 'Variation') {
+                    const selectedWarehouse = updatedProduct.warehouse.get(warehouseKey);
+                    if (!selectedWarehouse) {
+                        throw new Error(`Warehouse ${warehouseKey} not found for product with ID: ${currentID}`);
+                    }
+                  const productVariations = updatedProducts.filter(
+                        p => p.currentID === currentID && p.ptype === 'Variation'
+                    );
+
+                    productVariations.forEach(variationProduct => {
+                        const variationKey = variationProduct.variationValue;
+                        const newQty = variationProduct.quantity;
+                        const existingVarProduct = existingProducts.find(
+                            ep => ep.currentID === currentID && ep.variationValue === variationKey
+                        );
+                        const prevQty = existingVarProduct ? existingVarProduct.quantity : 0;
+                        const qtyDiff = newQty - prevQty;
+
+                        const variation = selectedWarehouse.variationValues.get(variationKey);
+                        if (!variation) {
+                            errors.push(`Variation ${variationKey} not found for product ID: ${currentID}`);
+                            return;
+                        }
+                        if (qtyDiff < 0 && variation.productQty < Math.abs(qtyDiff)) {
+                            errors.push(`Insufficient variation stock for product ID: ${currentID}, variation: ${variationKey}`);
+                            return;
+                        }
+                        variation.productQty -= qtyDiff;
+                        updatedProduct.markModified(`warehouse.${warehouseKey}.variationValues`);
+                    });
+                } else {
+                    errors.push(`Invalid product type for product with ID: ${currentID}`);
+                    return;
+                }
+
 
           // Ensure warehouse update is saved
           updatedProduct.warehouse.set(warehouse, warehouseData);
@@ -1484,6 +1454,73 @@ const updateSale = async (req, res) => {
         product.warehouse || updateData.warehouse || "default_warehouse",
     }));
 
+    // Update customer loyalty points (if applicable)
+// Update customer loyalty points (if applicable)
+try {
+    const claimedPoints = updateData.claimedPoints || 0;
+    const redeemedPointsFromSale = updateData.redeemedPointsFromSale || 0;
+
+    // Get the previous redeemed points from the existing sale
+    const previousRedeemedPoints = existingSale.redeemedPointsFromSale || 0;
+    
+    // Calculate the difference in points
+    const pointsDifference = redeemedPointsFromSale - previousRedeemedPoints;
+
+    console.log("Loyalty Points Update:", {
+        previousRedeemedPoints,
+        newRedeemedPoints: redeemedPointsFromSale,
+        pointsDifference,
+        customer: existingSale.customer
+    });
+
+    // Only update customer points if there's a difference and customer exists
+        if ((pointsDifference !== 0 || claimedPoints > 0) && 
+        existingSale.customer && existingSale.customer !== "Unknown") {
+        
+        let customer;
+        
+        // Find customer by ID or name
+        if (mongoose.Types.ObjectId.isValid(existingSale.customer)) {
+            customer = await Customers.findById(existingSale.customer);
+        } else {
+            customer = await Customers.findOne({ name: existingSale.customer });
+        }
+
+        if (customer) {
+            if (!customer.loyalty) {
+                customer.loyalty = {
+                    loyaltyReferenceNumber: `CUST-${customer._id.toString().slice(-6)}`,
+                    redeemedPoints: 0,
+                };
+            }
+
+            const currentRedeemedPoints = parseFloat(customer.loyalty.redeemedPoints) || 0;
+
+            if (claimedPoints > currentRedeemedPoints) {
+                console.warn(
+                    `Claimed points (${claimedPoints}) exceed available points (${currentRedeemedPoints}) for customer ${customer.name}`
+                );
+            }
+
+            // Calculate new points: current points - claimed points + redeemed points difference
+            const newRedeemedPoints = Math.max(0, currentRedeemedPoints - claimedPoints) + pointsDifference;
+
+            customer.loyalty.redeemedPoints = newRedeemedPoints;
+            await customer.save();
+
+            console.log(
+                `Updated customer ${customer.name} points: ${currentRedeemedPoints} -> ${newRedeemedPoints} (Claimed: ${claimedPoints}, Points Difference: ${pointsDifference})`
+            );
+        } else {
+            console.warn(
+                `Customer ${updateData.customer} not found for points update`
+            );
+        }
+    }
+} catch (pointsError) {
+    console.error("Error updating customer loyalty points:", pointsError);
+    // Don't throw error here as it shouldn't prevent the sale update
+}
     console.log("\uD83D\uDD04 Updating sale in DB...");
     const updatedSale = await Sale.findByIdAndUpdate(
       saleId,

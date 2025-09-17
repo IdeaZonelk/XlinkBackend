@@ -21,6 +21,11 @@ Handlebars.registerHelper("multiply", function (a, b) {
   return (a * b).toFixed(2);
 });
 
+Handlebars.registerHelper("formatPoints", function (number) {
+  if (isNaN(number)) return "0.00";
+  return parseFloat(number).toFixed(2);
+});
+
 Handlebars.registerHelper("getDisplayPrice", function (price, discount, taxRate, taxType) {
   console.log("DEBUG getDisplayPrice PARAMS:", { price, discount, taxRate, taxType });
   
@@ -384,7 +389,7 @@ const template = Handlebars.compile(`
         <!-- Customer Details -->
         <div class="customer-details" style="display:flex; justify-content:space-between;margin-left: 5px; margin-right: 5px">
             <p style="font-size: 14px; margin:0; padding-bottom:1px;">{{newSale.date}}</p>
-            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customerName}}</p>
+            <p style="font-size: 14px; margin:0; padding-bottom:1px">Customer: {{newSale.customer}}</p>
         </div>
 
         <div class="divider"></div>
@@ -429,10 +434,10 @@ const template = Handlebars.compile(`
         <span>Discount:</span>
         <span>{{formatCurrency newSale.discount}}</span>
     </div>
-    <div class="summary-row">
-        <span>Claimed Points:</span>
-        <span>{{newSale.claimedPoints}}</span>
-    </div>
+<div class="summary-row">
+    <span>Claimed Points:</span>
+    <span>{{formatPoints newSale.claimedPoints}}</span>
+</div>
 
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <div class="summary-row">

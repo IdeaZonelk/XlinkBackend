@@ -29,6 +29,11 @@ Handlebars.registerHelper("multiply", function (a, b) {
   return (a * b).toFixed(2);
 });
 
+// Add this helper near the other Handlebars helpers
+Handlebars.registerHelper("formatPoints", function (number) {
+  if (isNaN(number)) return "0.00";
+  return parseFloat(number).toFixed(2);
+});
 Handlebars.registerHelper("getDisplayPrice", function (price, discount, taxRate, taxType) {
   console.log("DEBUG getDisplayPrice PARAMS:", { price, discount, taxRate, taxType });
   
@@ -98,7 +103,6 @@ const formatDate = (date) => {
 
 const template = Handlebars.compile(`
 <div style="font-family: Arial, sans-serif; max-width: 80mm; margin: 0; padding: 10px; border: 1px solid #ccc; position: fixed; left: 0; top: 0;">
-        <!-- Your existing receipt content remains the same -->
             <style>
     @media print {
         body, html {
@@ -168,7 +172,7 @@ const template = Handlebars.compile(`
                 <p style="margin: 2.5px 0; font-size: 11px;">Salesman: {{newSale.cashierUsername}}</p>
                 <p style="margin: 2.5px 0; font-size: 11px;">Receipt No: {{newSale.invoiceNumber}}</p>
                 <p style="margin: 2.5px 0; font-size: 11px;">Date: {{newSale.date}}</p>
-                <p style="margin: 2.5px 0; font-size: 11px;">Customer: {{newSale.customerName}}</p>
+                <p style="margin: 2.5px 0; font-size: 11px;">Customer: {{newSale.customer}}</p>
             </div>
 
         <!-- Products Table -->
@@ -219,10 +223,17 @@ const template = Handlebars.compile(`
         <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatCurrency newSale.discount}}</td>
     </tr>
 
-    <tr>
-        <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
-        <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{newSale.claimedPoints}}</td>
-    </tr>
+<tr>
+    <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Claimed Points:</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatPoints newSale.claimedPoints}}</td>
+</tr>
+
+{{#if newSale.redeemedPointsFromSale}}
+<tr>
+    <td colspan="4" style="text-align: right; padding: 1.5px 0; font-size: 13px;">Redeemed Points:</td>
+    <td style="text-align: right; padding: 1.5px 0; font-size: 13px;">{{formatPoints newSale.redeemedPointsFromSale}}</td>
+</tr>
+{{/if}}
 
     {{#if (eq newSale.paymentStatus "unpaid")}}
     <tr>
