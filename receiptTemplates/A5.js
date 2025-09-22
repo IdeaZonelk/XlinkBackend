@@ -136,357 +136,371 @@ const formatDate = (date) => {
 
 const template = Handlebars.compile(`
 <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
-            <style>
-                /* Base Styles */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                }
-                    {
-                        width: "148mm", // A5 landscape width
-                        minHeight: "210mm", // A5 landscape height
-                        margin: "0 auto",
-                        boxShadow: "none",
-                        pageBreakInside: "avoid"
-                    }
-                
-                <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
-            <style>
-                /* Base Styles */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                }
-                
-                /* Print Styles */
-                @media print {
-                    body, .print-container {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    @page {
-                        size: A5 portrait;
-                        margin: 0;
-                        padding: 0;
-                    }
-                    .product-row {
-                        page-break-inside: avoid;
-                    }
-                    .page-break {
-                        page-break-before: always;
-                    }
-                }
-                
-                /* Receipt Container */
-                .receipt-container {
-                    width: 148mm;
-                    min-height: 210mm;
-                    margin: 0;
-                    padding: 10mm;
-                    background-color: white;
-                    border: 1px solid #d1d5db;
-                    box-shadow: none;
-                    page-break-inside: avoid;
-                }
-                
-                .print-container {
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: space-between;
-                }
-                
-                /* Company Header */
-                .company-header {
-                    text-align: center;
-                    color: #000000;
-                    margin-bottom: 20px;
-                }
-                
-                .logo-container {
-                    width: 100%;
-                    text-align: center;
-                    margin-bottom: 8px;
-                }
-                
-                .logo-placeholder {
-                    height: 60px;
-                    background: linear-gradient(45deg, #8B4513, #D2691E, #F4A460, #DEB887);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    font-weight: bold;
-                    color: #654321;
-                    position: relative;
-                    margin-bottom: 10px;
-                }
-                
-                .company-name {
-                    font-size: 18px;
-                    font-weight: bold;
-                    color: #000000;
-                    margin-bottom: 2px;
-                }
-                
-                .company-tagline {
-                    font-size: 12px;
-                    color: #666;
-                    margin-bottom: 15px;
-                }
-                
-                /* Invoice Meta Section */
-                .invoice-meta {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 10px;
-                    margin-top: 30px;
-                    font-size: 15px;
-                    color: #000000;
-                }
-                
-                .meta-left {
-                    flex: 1;
-                    text-align: left;
-                }
-                
-                .meta-right {
-                    text-align: right;
-                }
-                
-                .meta-item {
-                    margin-bottom: 3px;
-                    color: #000000;
-                }
-                
-                /* Divider Line */
-                .divider {
-                    width: 100%;
-                    border-top: 1px solid #000;
-                    margin: 8px 0;
-                    margin-top: 30px
-                }
-                
-                /* Products Section */
-                .products-section {
-                    margin-top: 40px;
-                }
-                
-                .products-header {
-                    display: flex;
-                    font-weight: bold;
-                    font-size: 15px;
-                    margin-bottom: 8px;
-                    color: #000000;
-                }
-                
-                .col-product {
-                    flex: 3;
-                    text-align: left;
-                }
-                
-                .col-discount {
-                    flex: 1.5;
-                    text-align: center;
-                }
-                
-                .col-quantity {
-                    flex: 1.5;
-                    text-align: center;
-                }
-                
-                .col-price {
-                    flex: 1.5;
-                    text-align: center;
-                }
-                
-                .col-subtotal {
-                    flex: 1.5;
-                    text-align: right;
-                }
-                
-                .product-row {
-                    display: flex;
-                    font-size: 14px;
-                    margin-bottom: 5px;
-                    color: #000000;
-                    align-items: flex-start;
-                }
-                
-                .product-name {
-                    word-wrap: break-word;
-                    line-height: 1.2;
-                }
-                
-                /* Payment Summary */
-                .payment-summary {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-top: 18px;
-                    font-size: 15px;
-                    color: #000000;
-                }
-                
-                .payment-left {
-                    flex: 1;
-                }
-                
-                .payment-right {
-                    flex: 1;
-                    text-align: right;
-                }
-                
-                .payment-item {
-                    margin-bottom: 3px;
-                }
-                
-                .summary-row {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 3px;
-                }
-                
-                .summary-row.total {
-                    font-size: 16px;
-                    margin-top: 5px;
-                }
+    <style>
+        /* Base Styles */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body, .print-container {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            @page {
+                size: A5 portrait;
+                margin: 0;
+                padding: 0;
+            }
+            .product-row {
+                page-break-inside: avoid;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+        
+        /* Receipt Container */
+        .receipt-container {
+            width: 148mm;
+            min-height: 210mm;
+            margin: 0;
+            padding: 10mm;
+            background-color: white;
+            border: 1px solid #d1d5db;
+            box-shadow: none;
+            page-break-inside: avoid;
+        }
+        
+        .print-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        /* Company Header */
+        .company-header {
+            text-align: center;
+            color: #000000;
+            margin-bottom: 20px;
+        }
+        
+        .logo-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        
+        .company-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000000;
+            margin-bottom: 2px;
+        }
+        
+        .company-tagline {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        /* Invoice Meta Section */
+        .invoice-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            margin-top: 30px;
+            font-size: 15px;
+            color: #000000;
+        }
+        
+        .meta-left {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .meta-right {
+            text-align: right;
+        }
+        
+        .meta-item {
+            margin-bottom: 3px;
+            color: #000000;
+        }
+        
+        /* Divider Line */
+        .divider {
+            width: 100%;
+            border-top: 1px solid #000;
+            margin: 8px 0;
+            margin-top: 30px;
+        } 
+        
+        /* Products Section */
+        .products-section {
+            margin-top: 8px;
+        }
+        
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            color: #000000;
+        }
+        
+        .products-table th,
+        .products-table td {
+            border: 1px solid black;
+            padding: 8px;
+        }
+        
+        .products-table th {
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
+        
+        .product-name {
+            word-wrap: break-word;
+            line-height: 1.2;
+        }
+        
+        /* Payment Summary */
+        .payment-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 18px;
+            font-size: 15px;
+            color: #000000;
+        }
+        
+        .payment-left {
+            flex: 1;
+        }
+        
+        .payment-right {
+            flex: 1;
+            text-align: right;
+        }
+        
+        .payment-item {
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+            font-size: 12px;
+        }
+        
+        .summary-row.total {
+            font-size: 12px;
+            margin-top: 5px;
+        }
 
-                .system-by {
-                    font-size: 14px;
-                    text-align: center;
-                    margin-top: 4px;
-                    color: #000000;
-                }
-            </style>
-            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        .barcode-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 16px;
+        }
+        
+        .system-by {
+            font-size: 14px;
+            text-align: center;
+            margin-top: 4px;
+            color: #000000;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
-            <!-- Company Header Section -->
-            <div class="receipt-container">
-                <!-- Company Header -->
-                <div class="company-header">
-                    <!-- Logo Container -->
-                    <div style="overflow: hidden; display: flex; justify-content: center; align-items: center; ">
-                    <img src="{{settings.logo}}" alt="Logo" style="max-height: 100px; max-width: 100%; margin: 2px auto;">
-                    </div>
+    <!-- Company Header Section -->
+    <div class="receipt-container">
+        <!-- Company Header -->
+        <div class="company-header">
+            <!-- Logo Container -->
+            {{#if settings.logo}}
+            <div style="overflow: hidden; display: flex; justify-content: center; align-items: center;">
+                <img src="{{settings.logo}}" alt="Logo" style="max-height: 100px; max-width: 100%; margin: 2px auto;">
+            </div>
+            {{/if}}
+        </div>
+
+        <!-- Invoice Meta Section -->
+        <div class="invoice-meta">
+            <!-- Left: Company and Customer Info -->
+            <div class="meta-left">
+                <div class="meta-item" style="font-size:14px;"><b>XLINK TECHNOLOGY</b><br>119/2, Oruwala, Athurugiriya</div>
+                <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> {{settings.companyMobile}} <br> info@xlink.lk</div>
+                <div class="meta-item" style="font-size:12px; margin-top:10px;"><b>Employee:</b> {{newSale.cashierUsername}}</div>
+                <div class="meta-item" style="font-size:14px;"> <br>
+                    <b>Bill To:</b> <b>Customer</b>
                 </div>
+                <div class="meta-item" style="padding-left: 65px; font-size:14px;">{{newSale.customer}}</div>
+            </div>
 
-                <!-- Invoice Meta Section -->
-                <div class="invoice-meta">
-                    <!-- Left: Invoice Meta Data -->
-                    <div class="meta-left">
-                        <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
-                        <div class="meta-item"><b>Customer:</b> {{newSale.customer}}</div>
-                        <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
-                    </div>
-
-                    <!-- Right: Date -->
-                    <div class="meta-right">
-                        <div class="meta-item"><b>Date</b> {{newSale.date}}</div>
-                    </div>
+            <!-- Right: Invoice Info -->
+            <div class="meta-right">
+                <div style="text-align: right; margin-bottom: 5px;">
+                    <b style="font-size: 26px;">RECEIPT</b>
                 </div>
+                <table style="border-collapse: collapse; margin-left: auto;">
+                    <tr>
+                        <td style="border: 1px solid black; padding: 4px 8px;"><b>Date:</b></td>
+                        <td style="border: 1px solid black; padding: 4px 8px;">{{newSale.date}}</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid black; padding: 4px 8px;"><b>Receipt No:</b></td>
+                        <td style="border: 1px solid black; padding: 4px 8px;">{{newSale.invoiceNumber}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
 
-                <!-- Products Section -->
-                <div class="products-section">
-                    <div class="products-header">
-                        <div class="col-product">Product</div>
-                        <div class="col-quantity">Quantity</div>
-                        <div class="col-price">Unit Price</div>
-                        <div class="col-discount">Discount</div>
-                        <div class="col-subtotal">Subtotal</div>
-                    </div>
-
+        <!-- Products Section -->
+        <div class="products-section">
+            <table class="products-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Description</th>
+                        <th style="text-align: center;">Qty</th>
+                        <th style="text-align: right;">Rate</th>
+                        <th style="text-align: right;">Discount</th>
+                        <th style="text-align: right;">Amount (LKR)</th>
+                    </tr>
+                </thead>
+                <tbody>
                     {{#each newSale.productsData}}
-                    <div class="product-row">
-                        <div class="col-product">
-                            <div class="product-name">{{this.name}} 
-                                {{#if this.warranty}}
-                                <span style="font-size: 11px; color: #2E86C1; font-weight: bold; background-color: #EBF5FB; padding: 1px 4px; border-radius: 3px; margin-left: 5px;">
-                                    ({{this.warranty}} warranty)
+                    <tr>
+                        <td style="text-align: left;" class="product-name">
+                            {{this.name}}
+                            {{#if this.warranty}}
+                                <br>
+                                <span style="font-size: 10px; color: #000000;">Warranty: {{this.warranty}}</span>
+                            {{/if}}
+                            {{#if this.appliedWholesale}}
+                                <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
+                                    W
                                 </span>
                             {{/if}}
-                            </div>
-                        </div>
-                        <div class="col-quantity">{{this.quantity}} pcs</div>
-                        <div class="col-price">{{formatCurrency (getDisplayPrice this.price this.discount this.taxRate this.taxType)}}</div>                        
-                        <div class="col-discount">{{formatCurrency (multiply this.specialDiscount this.quantity)}}</div>
-                        <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
-                    </div>
+                        </td>
+                        <td style="text-align: center;">{{this.quantity}} pcs</td>
+                        <td style="text-align: right;">{{formatCurrency (getDisplayPrice this.price this.discount this.taxRate this.taxType)}}</td>
+                        <td style="text-align: right;">{{formatCurrency (multiply this.specialDiscount this.quantity)}}</td>
+                        <td style="text-align: right;">LKR {{formatCurrency this.subtotal}}</td>
+                    </tr>
                     {{/each}}
+                    <tr style="font-weight: bold;">
+                        <td colspan="4" style="text-align: right;">Total:</td>
+                        <td style="text-align: right;">LKR {{formatCurrency newSale.baseTotal}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Payment Summary -->
+        <div class="payment-summary">
+            <div class="payment-left">
+                <!-- Payment Methods -->
+                {{#each newSale.paymentType}}
+                <div class="payment-item">
+                    {{#if (eq this.type "bank_transfer")}}Bank Transfer
+                    {{else if (eq this.type "cash")}}Cash
+                    {{else if (eq this.type "card")}}Card
+                    {{else}}Unknown
+                    {{/if}}: {{formatCurrency this.amount}}
                 </div>
-
-                <div class="divider"></div>
-
-                <!-- Payment Summary -->
-                <div class="payment-summary">
-                    <div class="payment-left">
-                        {{#each newSale.paymentType}}
-                        <div class="payment-item">
-                            <b> {{#if (eq this.type "bank_transfer")}}Bank Transfer
-    {{else if (eq this.type "cash")}}Cash
-    {{else if (eq this.type "card")}}Card
-    {{else}}Unknown
-    {{/if}}:</b> {{formatCurrency this.amount}}
-                        </div>
-                        {{/each}}
-                            {{#if (eq newSale.paymentStatus "unpaid")}}
-                            <div class="payment-item">
-                                <b>Paid Amount :</b> 0.00
-                            </div>
-                            <div class="payment-item">
-                                <b>Due Amount :</b> {{formatCurrency newSale.grandTotal}}<br>
-                                <span>(+shipping,tax)</span>
-                            </div>
-                            {{else}}
-                            <div class="payment-item">
-                                <b>Total Paid :</b> {{formatCurrency newSale.grandTotal}}
-                            </div>
-                            {{/if}}
-                    </div>
-
-                    <div class="payment-right">
-                        <!-- Calculate subtotal as sum of all products -->
-                        <div class="summary-row">
-                            <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency (sum newSale.productsData)}}</span>
-                        </div>
-                    <div class="summary-row">
-    <span><b>Claimed Points:</b></span>
-    <span>{{formatPoints newSale.claimedPoints}}</span>
-</div>
-                        <div class="summary-row">
-                            <span><b>Discount:</b></span>
-                            <span>(-) Rs {{formatCurrency newSale.discount}}</span>
-                        </div>
-                        <div class="summary-row total">
-                            <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency (subtract (sum newSale.productsData) newSale.discount)}}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {{#if newSale.note}}
-                <div style="margin-bottom:10px; font-size: 14px; word-wrap: break-word; overflow-wrap: break-word;">
-                    <p style="font-size: 14px; white-space: pre-wrap; word-break: break-word;">
-                        <b>Note:</b> {{newSale.note}}
-                    </p>
-                </div>
+                {{/each}}
+                
+                {{#if (eq newSale.paymentStatus "unpaid")}}
+                <div class="payment-item">Paid Amount: 0.00</div>
+                <div class="payment-item">Due Amount: {{formatCurrency newSale.grandTotal}}</div>
+                {{else}}
+                <div class="payment-item">Balance: {{formatCurrency newSale.cashBalance}}</div>
                 {{/if}}
+            </div>
 
-                <!-- Footer Message -->
-                <div style="text-align: center; margin-top: 20px; font-size: 12px;">
-                    <p style="margin: 5px 0;">
-                        <b>THANK YOU FOR SHOPPING WITH US!</b><br>
-                        Items can be returned within 3 days from the date of purchase, with the original bill.
-                    </p>
+            <div class="payment-right">
+                <!-- Loyalty Points Section -->
+                <div class="summary-row">
+                    <span><b>Claimed Points:</b></span>
+                    <span>{{formatPoints newSale.claimedPoints}}</span>
                 </div>
-
+                <div class="summary-row">
+                    <span><b>Redeemed Points From Sale:</b></span>
+                    <span>{{formatPoints newSale.redeemedPointsFromSale}}</span>
+                </div>
+                
+                <!-- Financial Summary -->
+                <div class="summary-row">
+                    <span><b>Subtotal:</b></span>
+                    <span>LKR {{formatCurrency newSale.baseTotal}}</span>
+                </div>
+                <div class="summary-row">
+                    <span><b>Discount:</b></span>
+                    <span>(-) LKR {{formatCurrency newSale.discount}}</span>
+                </div>
+                <div class="summary-row total">
+                    <span><b>Total:</b></span>
+                    <span>LKR {{formatCurrency newSale.grandTotal}}</span>
                 </div>
             </div>
-        </div>`);
+        </div>
+
+        {{#isValidNote newSale.note}}
+            <div style="margin-bottom:10px; font-size: 15px; word-wrap: break-word; overflow-wrap: break-word;">
+                <p style="margin-top: 3px; margin-bottom: 3px; font-size: 12px; white-space: pre-wrap; word-break: break-word;">
+                Note: {{newSale.note}}
+                </p>
+            </div>
+        {{/isValidNote}}
+
+        <!-- Footer Notice -->
+        <div style="text-align: center; font-size: 11px; color: #000000; margin-top: 10px;">
+            *** *NO EXCHANGE* *NO CASH REFUND* *NO WARRANTY FOR PHYSICAL BURN MARK, LIGHTING DAMAGE* *** <br/> 
+            THANK YOU FOR SHOPPING WITH US!<br/>
+            Items can be returned within 3 days from the date of purchase, with the original bill.
+        </div>
+        
+        <!-- Signature -->
+        <div style="text-align: left; font-size: 12px; margin-left: 5px; margin-top: 15px;">
+            Signature: _________________________________
+        </div>
+        
+        <!-- Barcode Section -->
+        <div class="barcode-container">
+            <svg id="barcode-{{newSale.invoiceNumber}}"></svg>
+        </div>
+        <p class="system-by">System by IDEAZONE</p>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    JsBarcode('#barcode-{{newSale.invoiceNumber}}', '{{newSale.invoiceNumber}}', {
+                        format: 'CODE128',
+                        width: 1.2,
+                        height: 25,
+                        fontSize: 14,
+                        margin: 2,
+                        displayValue: true
+                    });
+                } catch (e) {
+                    console.error('Barcode generation error:', e);
+                }
+            });
+        </script>
+    </div>
+</div>
+`);
 
 module.exports = {
   generateReceiptA5: (data) => {

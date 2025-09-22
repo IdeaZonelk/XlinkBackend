@@ -2630,7 +2630,7 @@ const printInvoice = async (req, res) => {
                                 <th style="border: 1px solid black; padding: 8px; text-align: left;">Description</th>
                                 <th style="border: 1px solid black; padding: 8px; text-align: center;">Qty</th>
                                 <th style="border: 1px solid black; padding: 8px; text-align: right;">Rate</th>
-                                <th style="border: 1px solid black; padding: 8px; text-align: right;">Amount</th>
+                                <th style="border: 1px solid black; padding: 8px; text-align: right;">Amount (LKR)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2650,12 +2650,12 @@ const printInvoice = async (req, res) => {
                                 </td>
                                 <td style="border: 1px solid black; padding: 8px; text-align: center;">{{this.quantity}} pcs</td>
                                 <td style="border: 1px solid black; padding: 8px; text-align: right;">{{formatCurrency this.price}}</td>
-                                <td style="border: 1px solid black; padding: 8px; text-align: right;">{{formatCurrency this.subtotal}}</td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: right;">LKR {{formatCurrency this.subtotal}}</td>
                             </tr>
                             {{/each}}
                             <tr style="border: 1px solid black; font-weight: bold;">
                                 <td colspan="3" style="border: 1px solid black; padding: 8px; text-align: right;">Total:</td>
-                                <td style="border: 1px solid black; padding: 8px; text-align: right;">{{formatCurrency newSale.baseTotal}}</td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: right;">LKR {{formatCurrency newSale.baseTotal}}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2683,15 +2683,15 @@ const printInvoice = async (req, res) => {
                         <!-- Calculate subtotal as sum of all products -->
                         <div class="summary-row">
                             <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
+                            <span>LKR {{formatCurrency newSale.baseTotal}}</span>
                         </div>
                         <div class="summary-row">
                             <span><b>Discount</b></span>
-                            <span>(-) Rs {{formatCurrency newSale.discount}}</span>
+                            <span>(-) LKR {{formatCurrency newSale.discount}}</span>
                         </div>
                         <div class="summary-row total">
                             <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
+                            <span>LKR {{formatCurrency newSale.grandTotal}}</span>
                         </div>
                     </div>
                 </div>
