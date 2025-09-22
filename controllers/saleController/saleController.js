@@ -14,6 +14,7 @@ const SalePayment = require("../../models/salePaymentModel");
 const Product = require("../../models/products/product");
 const Settings = require("../../models/settingsModel");
 const SaleReturn = require("../../models/saleReturnModel");
+const Service = require("../../models/products/productService");
 const Cash = require("../../models/posModel/cashModel");
 const Customers = require("../../models/customerModel");
 const mongoose = require("mongoose");
@@ -144,6 +145,44 @@ const createSale = async (req, res) => {
     const newSale = new Sale(saleData);
 
     const productsData = saleData.productsData;
+    console.log('Products data received:', JSON.stringify(productsData, null, 2));
+    
+    // Debug each product to see structure
+    productsData.forEach((product, index) => {
+      console.log(`Product ${index}:`, {
+        name: product.name,
+        currentID: product.currentID,
+        isService: product.isService,
+        currentIDType: typeof product.currentID,
+        isValidObjectId: mongoose.Types.ObjectId.isValid(product.currentID),
+        fullProduct: JSON.stringify(product, null, 2)
+      });
+    });
+
+    // Check if the problematic ID exists in either collection
+    const problematicId = "68cd32179460aa0ad5d9626a";
+    if (productsData.some(p => p.currentID === problematicId)) {
+      console.log(`🔍 DEBUGGING PROBLEMATIC ID: ${problematicId}`);
+      
+      // Check if it exists as a product
+      try {
+        const productCheck = await Product.findById(problematicId);
+        console.log(`Product check result:`, productCheck ? 'FOUND' : 'NOT FOUND');
+      } catch (err) {
+        console.log(`Product check error:`, err.message);
+      }
+      
+      // Check if it exists as a service
+      try {
+        const serviceCheck = await Service.findById(problematicId);
+        console.log(`Service check result:`, serviceCheck ? 'FOUND' : 'NOT FOUND');
+        if (serviceCheck) {
+          console.log(`Service details:`, JSON.stringify(serviceCheck, null, 2));
+        }
+      } catch (err) {
+        console.log(`Service check error:`, err.message);
+      }
+    }
 
     // Prepare update promises for product quantities
     const updatePromises = productsData.map(async (product) => {
@@ -155,10 +194,35 @@ const createSale = async (req, res) => {
         variationValue,
         batchNumber,
         isWeight,
+        isService,
       } = product;
 
+      console.log(`Processing product: ${currentID}, isService: ${isService}, name: ${product.name}`);
+
+      // First check if this is a service by trying to find it in Service collection
+      let isActuallyService = isService;
+      if (!isActuallyService && mongoose.Types.ObjectId.isValid(currentID)) {
+        const serviceCheck = await Service.findById(currentID);
+        if (serviceCheck) {
+          isActuallyService = true;
+          console.log(`Detected service by ID lookup: ${currentID}`);
+        }
+      }
+
+      // Skip inventory updates for services
+      if (isActuallyService) {
+        console.log(`Skipping inventory update for service: ${currentID}`);
+        // Validate service exists
+        const serviceExists = await Service.findById(currentID);
+        if (!serviceExists) {
+          throw new Error(`Service not found with ID: ${currentID}`);
+        }
+        return Promise.resolve(); // Services don't need inventory updates
+      }
+
+      // Only validate ObjectId and find product if it's not a service
       if (!mongoose.Types.ObjectId.isValid(currentID)) {
-        throw new Error(`Invalid product ID: ${currentID}`);
+        throw new Error(`Invalid product/service ID: ${currentID}`);
       }
       if (!warehouse) {
         throw new Error(
@@ -656,7 +720,21 @@ const createNonPosSale = async (req, res) => {
 
     // Prepare update promises for product quantities
     const updatePromises = productsData.map(async (product) => {
-      const { currentID, quantity, stockQty, ptype, warehouse } = product;
+      const { currentID, quantity, stockQty, ptype, warehouse, isService } = product;
+
+      // Skip inventory updates for services
+      if (isService) {
+        console.log(`Skipping inventory update for service in createNonPosSale: ${currentID}`);
+        // Validate service exists
+        const serviceExists = await Service.findById(currentID);
+        if (!serviceExists) {
+          return Promise.reject({
+            message: `Service not found with ID: ${currentID}`,
+            status: "unsuccess",
+          });
+        }
+        return Promise.resolve(); // Services don't need inventory updates
+      }
 
       if (!mongoose.Types.ObjectId.isValid(currentID)) {
         return Promise.reject({
@@ -1168,13 +1246,56 @@ const findSaleById = async (req, res) => {
     const productIds = sale.productsData.map((product) => product.currentID);
     console.log("🆔 Extracted Product IDs:", productIds);
 
-    const products = await Product.find({ _id: { $in: productIds } }).lean(); // Using lean() to get plain objects
-    console.log(
-      "📦 Full Product Data Fetched from DB:",
-      JSON.stringify(products, null, 2)
-    );
+    // Separate product IDs and service IDs based on isService flag
+    const productOnlyIds = [];
+    const serviceOnlyIds = [];
+    
+    sale.productsData.forEach((product) => {
+      if (product.isService) {
+        serviceOnlyIds.push(product.currentID);
+      } else {
+        productOnlyIds.push(product.currentID);
+      }
+    });
+
+    // Fetch products and services separately
+    const products = productOnlyIds.length > 0 
+      ? await Product.find({ _id: { $in: productOnlyIds } }).lean()
+      : [];
+    const services = serviceOnlyIds.length > 0 
+      ? await Service.find({ _id: { $in: serviceOnlyIds } }).lean()
+      : [];
+
+    console.log("📦 Full Product Data Fetched from DB:", JSON.stringify(products, null, 2));
+    console.log("🔧 Full Service Data Fetched from DB:", JSON.stringify(services, null, 2));
 
     const updatedProductsData = sale.productsData.map((productData) => {
+      // Check if this is a service first
+      if (productData.isService) {
+        const baseService = services.find(
+          (s) => s._id.toString() === productData.currentID
+        );
+        
+        if (baseService) {
+          console.log(`Service found for ID ${productData.currentID}:`, JSON.stringify(baseService, null, 2));
+          return {
+            ...productData,
+            stockQty: "Unlimited", // Services have unlimited quantity
+            productCost: baseService.price || 0,
+            isService: true
+          };
+        } else {
+          console.warn(`Service with currentID ${productData.currentID} not found.`);
+          return {
+            ...productData,
+            stockQty: "N/A",
+            productCost: 0,
+            isService: true
+          };
+        }
+      }
+
+      // Handle regular products
       const baseProduct = products.find(
         (p) => p._id.toString() === productData.currentID
       );
@@ -1329,8 +1450,15 @@ const updateSale = async (req, res) => {
             quantity: newQuantity,
             ptype,
             variationValue,
+            isService,
           } = product;
           const warehouse = product.warehouse || updateData.warehouse;
+
+          // Skip inventory updates for services
+          if (isService) {
+            console.log(`Skipping inventory update for service in updateSale: ${currentID}`);
+            return;
+          }
 
           console.log(
             "🔖 Processing Product:",
@@ -1847,13 +1975,54 @@ const fetchTodaySales = async (req, res) => {
       return res.status(404).json({ message: "No sales found for today." });
     }
 
-    const productIds = sales.flatMap((sale) =>
-      sale.productsData.map((product) => product.currentID)
-    );
-    const products = await Product.find({ _id: { $in: productIds } }).lean();
+    // Separate product IDs and service IDs
+    const productOnlyIds = [];
+    const serviceOnlyIds = [];
+    
+    sales.forEach((sale) => {
+      sale.productsData.forEach((product) => {
+        if (product.isService) {
+          serviceOnlyIds.push(product.currentID);
+        } else {
+          productOnlyIds.push(product.currentID);
+        }
+      });
+    });
+
+    // Fetch products and services separately
+    const products = productOnlyIds.length > 0 
+      ? await Product.find({ _id: { $in: productOnlyIds } }).lean()
+      : [];
+    const services = serviceOnlyIds.length > 0 
+      ? await Service.find({ _id: { $in: serviceOnlyIds } }).lean()
+      : [];
 
     const salesWithUpdatedProducts = sales.map((sale) => {
       const updatedProductsData = sale.productsData.map((productData) => {
+        // Handle services first
+        if (productData.isService) {
+          const baseService = services.find(
+            (s) => s._id.toString() === productData.currentID
+          );
+          
+          if (baseService) {
+            return {
+              ...productData,
+              stockQty: "Unlimited",
+              productCost: baseService.price || 0,
+              isService: true
+            };
+          } else {
+            return {
+              ...productData,
+              stockQty: "N/A",
+              productCost: 0,
+              isService: true
+            };
+          }
+        }
+
+        // Handle regular products
         const baseProduct = products.find(
           (p) => p._id.toString() === productData.currentID
         );
@@ -1951,13 +2120,54 @@ const fetchLastWeekSales = async (req, res) => {
         .json({ message: "No sales found for the last week." });
     }
 
-    const productIds = sales.flatMap((sale) =>
-      sale.productsData.map((product) => product.currentID)
-    );
-    const products = await Product.find({ _id: { $in: productIds } }).lean();
+    // Separate product IDs and service IDs
+    const productOnlyIds = [];
+    const serviceOnlyIds = [];
+    
+    sales.forEach((sale) => {
+      sale.productsData.forEach((product) => {
+        if (product.isService) {
+          serviceOnlyIds.push(product.currentID);
+        } else {
+          productOnlyIds.push(product.currentID);
+        }
+      });
+    });
+
+    // Fetch products and services separately
+    const products = productOnlyIds.length > 0 
+      ? await Product.find({ _id: { $in: productOnlyIds } }).lean()
+      : [];
+    const services = serviceOnlyIds.length > 0 
+      ? await Service.find({ _id: { $in: serviceOnlyIds } }).lean()
+      : [];
 
     const salesWithUpdatedProducts = sales.map((sale) => {
       const updatedProductsData = sale.productsData.map((productData) => {
+        // Handle services first
+        if (productData.isService) {
+          const baseService = services.find(
+            (s) => s._id.toString() === productData.currentID
+          );
+          
+          if (baseService) {
+            return {
+              ...productData,
+              stockQty: "Unlimited",
+              productCost: baseService.price || 0,
+              isService: true
+            };
+          } else {
+            return {
+              ...productData,
+              stockQty: "N/A",
+              productCost: 0,
+              isService: true
+            };
+          }
+        }
+
+        // Handle regular products
         const baseProduct = products.find(
           (p) => p._id.toString() === productData.currentID
         );

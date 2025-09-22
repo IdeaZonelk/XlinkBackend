@@ -50,6 +50,7 @@ const productController = require('../controllers/productController/productContr
 const baseUnitController = require('../controllers/productController/baseUnitController');
 const brandsController = require('../controllers/productController/brandController');
 const categoryController= require('../controllers/productController/categoryController');
+const serviceController = require('../controllers/productController/serviceController');
 const unitController = require('../controllers/productController/unitController');
 const productVariationController = require('../controllers/productController/variationController');
 const barcodeController = require('../controllers/productController/barcodeController');
@@ -175,6 +176,12 @@ router.get('/findProductByName', productController.searchProductByName);
 
 router.get('/findProductForUpdate/:id', productController.findProductForUpdate);
 
+router.get('/findAllService', serviceController.findAllService);
+
+router.get('/getServiceForUpdate/:id', serviceController.getServiceForUpdate);
+
+router.get('/searchService', serviceController.searchService);
+
 router.get('/getBaseUnitForUpdate/:id', baseUnitController.getBaseUnitForUpdate);
 
 router.get('/allBaseUnit', baseUnitController.findAllBaseUnits);
@@ -223,6 +230,9 @@ router.get('/zreading', posController.getAllZReadingDetails);
 router.get('/getZreadingByDate', posController.getAllZReadingByDate);
 
 router.get('/getCustomerReport',customerReportController.getCustomerReport);
+
+router.get('/fetchAllBrandsNoPagination', brandsController.fetchAllBrandsNoPagination);
+router.get('/fetchAllCategoriesNoPagination', categoryController.fetchAllCategoriesNoPagination);
 
 //router.get('/getSuplierReport',suplierReportController.getSupplierReport);
 
@@ -286,6 +296,7 @@ router.get('/searchCurrency', currencyController.searchCurrency)
 router.get('/searchExpense', expensesController.searchExpense)
 router.get('/searchExpenseCategory', expensesCatController.searchExpenseCategory)
 router.get('/searchAdjustment', adjustmentController.searchAdjustment)
+router.get('/fetchAllBrandsNoPagination', brandsController.fetchAllBrandsNoPagination);
 
 // Define the endpoint to fetch sales data by month
 router.get('/sales/monthly', async (req, res) => {

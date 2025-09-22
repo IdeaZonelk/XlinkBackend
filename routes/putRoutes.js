@@ -49,6 +49,7 @@ const productControll = require('../controllers/productController/productControl
 const baseUnitControll = require('../controllers/productController/baseUnitController');
 const brandsControll = require('../controllers/productController/brandController');
 const categoryController= require('../controllers/productController/categoryController');
+const serviceController = require('../controllers/productController/serviceController');
 const unitControll = require('../controllers/productController/unitController');
 const productVariationController = require('../controllers/productController/variationController');
 const staffRefreshmentsController  = require('../controllers/staffRefreshmentsController/staffRefreshmentsController');
@@ -132,6 +133,8 @@ router.put('/changepassword/:id', changePasswordController.changePassword);
 router.put('/editWarehouseByAdmin' , warehouseController.UpdateWarehouse);
 
 router.put('/updateProduct/:id', upload.single('image'), productControll.updateProduct);
+
+router.put('/updateService/:id', serviceController.updateService);
 
 router.put('/updateBaseUnit', baseUnitControll.updateBaseUnit);
 

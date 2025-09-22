@@ -390,6 +390,29 @@ const fetchCategories = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
+const fetchAllCategoriesNoPagination = async (req, res) => {
+    try {
+        const categories = await Category.find().sort({ category: 1 });
+        
+        const processedCategories = categories.map(category => {
+            const categoryObj = category.toObject();
+            if (categoryObj.logo) {
+                const imageUrl = `${req.protocol}://${req.get('host')}/uploads/category/${path.basename(categoryObj.logo)}`;
+                categoryObj.logo = imageUrl;
+            }
+            return categoryObj;
+        });
+
+        res.json({
+            data: processedCategories,
+            totalCategories: categories.length,
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
 
 
-module.exports = { createCategory, findAllCategories, deleteCategory, updateCategory, findCategory, getCategoryForUpdate, fetchCategories, searchCategories }
+
+
+module.exports = { createCategory, findAllCategories, deleteCategory, updateCategory, findCategory, getCategoryForUpdate, fetchCategories, searchCategories,fetchAllCategoriesNoPagination }

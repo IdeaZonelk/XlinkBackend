@@ -38,6 +38,7 @@ const baseUnitController = require('../controllers/productController/baseUnitCon
 const barcodeController = require('../controllers/productController/barcodeController');
 const brandsController = require('../controllers/productController/brandController');
 const categoryController= require('../controllers/productController/categoryController');
+const serviceController = require('../controllers/productController/serviceController');
 const unitController = require('../controllers/productController/unitController');
 const productVariationController = require('../controllers/productController/variationController');
 const cashController = require('../controllers/posController/cashController');
@@ -97,6 +98,8 @@ router.delete('/deleteProductFromQuatation', quatationController.deleteProductFr
 router.delete('/deleteProductFromSale',saleController.deleteProductFromSale);
 
 router.delete('/deleteProduct/:id', productController.deleteProduct);
+
+router.delete('/deleteService/:id', serviceController.deleteService);
 
 router.delete('/deleteBaseUnit/:id', baseUnitController.deleteBaseUnit);
 

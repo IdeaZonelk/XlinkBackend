@@ -434,4 +434,28 @@ const fetchBrands = async (req, res) => {
     }
 };
 
-module.exports = { createProductBrands, findAllProductBrands, updateProductBrands, deleteProductBrand, getBrandsForUpdate, findBrand, fetchBrands, searchBrands }
+
+const fetchAllBrandsNoPagination = async (req, res) => {
+    try {
+        // Fetch ALL brands without pagination
+        const brands = await Brands.find().sort({ brandName: 1 });
+        
+        const processedBrands = brands.map(brand => {
+            const brandObj = brand.toObject();
+            if (brandObj.logo) {
+                const imageUrl = `${req.protocol}://${req.get('host')}/uploads/brand/${path.basename(brandObj.logo)}`;
+                brandObj.logo = imageUrl;
+            }
+            return brandObj;
+        });
+
+        res.json({
+            data: processedBrands,
+            totalBrands: brands.length,
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+module.exports = { createProductBrands, findAllProductBrands, updateProductBrands, deleteProductBrand, getBrandsForUpdate, findBrand, fetchBrands, searchBrands,fetchAllBrandsNoPagination }

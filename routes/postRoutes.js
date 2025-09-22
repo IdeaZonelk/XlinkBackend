@@ -44,6 +44,7 @@ const productControll = require('../controllers/productController/productControl
 const baseUnitControll = require('../controllers/productController/baseUnitController');
 const brandsControll = require('../controllers/productController/brandController');
 const categoryController= require('../controllers/productController/categoryController');
+const serviceController = require('../controllers/productController/serviceController');
 const unitControll = require('../controllers/productController/unitController');
 const productVariationController = require('../controllers/productController/variationController');
 const cashController = require('../controllers/posController/cashController');
@@ -167,6 +168,8 @@ router.post('/login', loginController.loginUser);
 router.post('/forgetpassword',sendResetCode );
 
 router.post('/createProduct', upload.single('image'), productControll.createProduct);
+
+router.post('/createService', serviceController.createService);
 
 router.post('/createBaseUnit',baseUnitControll.createBaseUnit);
 
