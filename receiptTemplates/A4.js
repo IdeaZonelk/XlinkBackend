@@ -308,7 +308,12 @@ const template = Handlebars.compile(`
             <!-- Left: Company and Customer Info -->
             <div class="meta-left">
                 <div class="meta-item" style="font-size:14px;"><b>XLINK TECHNOLOGY</b><br>119/2, Oruwala, Athurugiriya</div>
-                <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> {{settings.companyMobile}} <br> info@xlink.lk</div>
+                <!-- Fixed: Ensure company mobile is displayed with fallback -->
+                <div class="meta-item" style="font-size:14px;">
+                    <b>Mobile:</b> 
+                    {{settings.companyMobile}} / 0762473808
+                    <br> info@xlink.lk
+                </div>
                 <div class="meta-item" style="font-size:12px; margin-top:10px;"><b>Employee:</b> {{newSale.cashierUsername}}</div>
                 <div class="meta-item" style="font-size:14px;"> <br>
                     <b>Bill To:</b> <b>Customer</b>
@@ -435,7 +440,7 @@ const template = Handlebars.compile(`
         {{/isValidNote}}
 
         <!-- Barcode Section -->
-    <div class="barcode-container" style="position: absolute; right: 14mm; bottom: 2mm; width: 120px; display: flex; flex-direction: column; align-items: center;">
+        <div class="barcode-container" style="position: absolute; right: 14mm; bottom: 2mm; width: 120px; display: flex; flex-direction: column; align-items: center;">
             <svg id="barcode-{{newSale.invoiceNumber}}"></svg>
             <p class="system-by" style="text-align: center; margin-top: 4px;">System by IDEAZONE</p>
         </div>
@@ -456,21 +461,21 @@ const template = Handlebars.compile(`
                 }
             });
         </script>
-          <!-- Terms and Conditions Section -->
-          <div style="position: absolute; left: 10mm; bottom: 10mm; width: 60%; font-size: 10px; color: #333; text-align: left; line-height: 1.4;">
+        
+        <!-- Terms and Conditions Section -->
+        <div style="position: absolute; left: 10mm; bottom: 10mm; width: 60%; font-size: 10px; color: #333; text-align: left; line-height: 1.4;">
             <b>Terms and Conditions</b>
             <ul style="padding-left: 16px; margin: 6px 0 0 0;">
-              <li>14 days required for warranty coverage.</li>
-              <li>Burn marks, physical damage, and corrosion are not covered by warranty.</li>
-              <li>Warranty covers only manufacturer’s defects. Damage or defects caused by negligence, misuse, improper operation, power fluctuation, lightning, or other natural disasters are not covered.</li>
-              <li>Sabotage or accidents are not included under this warranty.</li>
-              <li>Invoice must be produced for warranty claims. Warranty is void if the sticker is removed or damaged.</li>
-              <li>Goods once sold are not returnable under any circumstances.</li>
-               </ul>
-              <br>
-              <b>THANK YOU FOR YOUR BUSINESS!</b>
-           
-          </div>
+                <li>14 days required for warranty coverage.</li>
+                <li>Burn marks, physical damage, and corrosion are not covered by warranty.</li>
+                <li>Warranty covers only manufacturer's defects. Damage or defects caused by negligence, misuse, improper operation, power fluctuation, lightning, or other natural disasters are not covered.</li>
+                <li>Sabotage or accidents are not included under this warranty.</li>
+                <li>Invoice must be produced for warranty claims. Warranty is void if the sticker is removed or damaged.</li>
+                <li>Goods once sold are not returnable under any circumstances.</li>
+            </ul>
+            <br>
+            <b>THANK YOU FOR YOUR BUSINESS!</b>
+        </div>
     </div>
 </div>
 `);

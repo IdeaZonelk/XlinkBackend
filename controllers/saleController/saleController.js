@@ -466,11 +466,18 @@ const createSale = async (req, res) => {
       grandTotal: saleData.grandTotal,
     });
 
-  const templateData = {
+  // Debug log to check settings values
+    console.log('Settings Debug:', {
+        companyMobile: settings.companyMobile,
+        receiptPhone: receiptSettings.phone,
+        fullSettings: settings
+    });
+
+    const templateData = {
             settings: {
                 companyName: settings.companyName || '',
                 companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
-                companyMobile: receiptSettings.phone ? (settings.companyMobile || 'Phone: XXX-XXX-XXXX') : '',
+                companyMobile: settings.companyMobile, // Remove conditional to always pass mobile number
                 logo: receiptSettings.logo ? logoUrl : null,
             },
             newSale: {
@@ -2596,7 +2603,8 @@ const printInvoice = async (req, res) => {
                     <!-- Left: Invoice Meta Data -->
                     <div class="meta-left">
                         <div class="meta-item" style="font-size:14px;"><b>XLINK TECHNOLOGY</br>119/2 ,Oruwala, Athurugiriya</div>
-                        <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> 075 727 7770 <br> info@xlink.lk</div>
+                        <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> {{settings.companyMobile}} / 076 247 3808</div>
+                        <div class="meta-item" style="font-size:14px;"><b>Email:</b> info@xlink.lk</div>
             <div class="meta-item" style="font-size:14px;"> <br>
             <b>Bill To:</b> <b>Customer</b>
             </div>
