@@ -478,6 +478,7 @@ const createSale = async (req, res) => {
                 companyName: settings.companyName || '',
                 companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
                 companyMobile: settings.companyMobile, // Remove conditional to always pass mobile number
+                companyEmail: settings.email || 'info@xlink.lk',
                 logo: receiptSettings.logo ? logoUrl : null,
             },
             newSale: {
@@ -863,6 +864,7 @@ try {
         companyMobile: receiptSettings.phone
           ? settings.companyMobile || "Phone: XXX-XXX-XXXX"
           : "",
+        companyEmail: settings.companyEmail || "info@xlink.lk",
         logo: receiptSettings.logo ? logoUrl : null,
       },
       isNonPosSale: true, // Flag to identify non-POS sales
@@ -2317,11 +2319,19 @@ const printInvoice = async (req, res) => {
         ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
         : null;
 
+    // Debug log for settings
+    console.log('Print Invoice Settings:', {
+        hasSettings: !!settings,
+        companyEmail: settings.companyEmail,
+        fullSettings: settings
+    });
+
     const templateData = {
         settings: {
             companyName: settings.companyName || 'IDEAZONE',
             companyAddress: settings.address || 'Address: XXX-XXX-XXXX',
             companyMobile: settings.companyMobile || 'Phone: XXX-XXX-XXXX',
+            companyEmail: settings.email || 'info@xlink.lk',
             logo: logoUrl,
         },
         newSale: {
@@ -2602,13 +2612,12 @@ const printInvoice = async (req, res) => {
                 <div class="invoice-meta">
                     <!-- Left: Invoice Meta Data -->
                     <div class="meta-left">
-                        <div class="meta-item" style="font-size:14px;"><b>XLINK TECHNOLOGY</br>119/2 ,Oruwala, Athurugiriya</div>
+                        <div class="meta-item" style="font-size:14px;"><b>{{settings.companyName}}</br>{{settings.companyAddress}}</div>
                         <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> {{settings.companyMobile}} / 076 247 3808</div>
-                        <div class="meta-item" style="font-size:14px;"><b>Email:</b> info@xlink.lk</div>
+                        <div class="meta-item" style="font-size:14px;"><b>Email:</b> {{settings.companyEmail}} </div>
             <div class="meta-item" style="font-size:14px;"> <br>
-            <b>Bill To:</b> <b>Customer</b>
+            <b>Bill To:</b> <b>{{newSale.customer}}</b>
             </div>
-          <div class="meta-item" style="padding-left: 65px; font-size:14px;">{{newSale.customer}}</div>
                     </div>
 
                   

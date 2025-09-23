@@ -307,18 +307,18 @@ const template = Handlebars.compile(`
         <div class="invoice-meta">
             <!-- Left: Company and Customer Info -->
             <div class="meta-left">
-                <div class="meta-item" style="font-size:14px;"><b>XLINK TECHNOLOGY</b><br>119/2, Oruwala, Athurugiriya</div>
+                <div class="meta-item" style="font-size:14px;"><b>{{settings.companyName}}</b><br>{{settings.companyAddress}}</div>
                 <!-- Fixed: Ensure company mobile is displayed with fallback -->
                 <div class="meta-item" style="font-size:14px;">
                     <b>Mobile:</b> 
                     {{settings.companyMobile}} / 0762473808
-                    <br> info@xlink.lk
+                    <br> <div class="meta-item" style="font-size:14px;"><b>Email:</b> {{settings.companyEmail}}</div>
                 </div>
                 <div class="meta-item" style="font-size:12px; margin-top:10px;"><b>Employee:</b> {{newSale.cashierUsername}}</div>
                 <div class="meta-item" style="font-size:14px;"> <br>
-                    <b>Bill To:</b> <b>Customer</b>
+                   <b>Bill To:</b> <b>{{newSale.customer}}</b>
                 </div>
-                <div class="meta-item" style="padding-left: 65px; font-size:14px;">{{newSale.customer}}</div>
+                
             </div>
 
             <!-- Right: Invoice Info -->
