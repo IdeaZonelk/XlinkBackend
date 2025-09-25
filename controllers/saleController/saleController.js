@@ -466,11 +466,19 @@ const createSale = async (req, res) => {
       grandTotal: saleData.grandTotal,
     });
 
-  const templateData = {
+  // Debug log to check settings values
+    console.log('Settings Debug:', {
+        companyMobile: settings.companyMobile,
+        receiptPhone: receiptSettings.phone,
+        fullSettings: settings
+    });
+
+    const templateData = {
             settings: {
                 companyName: settings.companyName || '',
                 companyAddress: receiptSettings.address ? (settings.address || 'Address: XXX-XXX-XXXX') : '',
-                companyMobile: receiptSettings.phone ? (settings.companyMobile || 'Phone: XXX-XXX-XXXX') : '',
+                companyMobile: settings.companyMobile, // Remove conditional to always pass mobile number
+                companyEmail: settings.email || 'info@xlink.lk',
                 logo: receiptSettings.logo ? logoUrl : null,
             },
             newSale: {
@@ -483,6 +491,7 @@ const createSale = async (req, res) => {
                     name: product.name || 'Unnamed Product',
                     price: product.applicablePrice || 0,
                     appliedWholesale: product.appliedWholesale || false,
+                    warranty: product.warranty || '',
                     quantity: product.quantity || 0,
                     subtotal: product.subtotal || 0,
                     specialDiscount: product.specialDiscount || 0,
@@ -855,6 +864,7 @@ try {
         companyMobile: receiptSettings.phone
           ? settings.companyMobile || "Phone: XXX-XXX-XXXX"
           : "",
+        companyEmail: settings.companyEmail || "info@xlink.lk",
         logo: receiptSettings.logo ? logoUrl : null,
       },
       isNonPosSale: true, // Flag to identify non-POS sales
@@ -2212,6 +2222,7 @@ const fetchLastYearSales = async (req, res) => {
             name: productData.name,
             price: productData.price,
             productCost,
+            warranty: productData.warranty,
             ptype: productData.ptype,
             discount: productData.discount,
             specialDiscount: productData.specialDiscount,
@@ -2246,6 +2257,9 @@ const fetchLastYearSales = async (req, res) => {
 };
 
 // GET /api/printInvoice/:saleId
+
+
+
 const printInvoice = async (req, res) => {
   try {
     const { saleId } = req.params;
@@ -2256,66 +2270,126 @@ const printInvoice = async (req, res) => {
       return res.status(404).json({ message: "Sale or settings not found" });
     }
 
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const logoUrl = settings.logo
-            ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
-            : null;
+    // Resolve customer name if it's an ObjectId
+    let customerName = 'Unknown Customer';
+    
+    if (sale.customer && sale.customer !== 'Unknown') {
+      // Check if customer is an ObjectId
+      if (mongoose.Types.ObjectId.isValid(sale.customer)) {
+        try {
+          const customer = await Customers.findById(sale.customer);
+          customerName = customer ? customer.name : 'Unknown Customer';
+        } catch (error) {
+          console.error('Error fetching customer:', error);
+          customerName = 'Unknown Customer';
+        }
+      } else {
+        // If it's already a string (customer name), use it directly
+        customerName = sale.customer;
+      }
+    }
 
-        const templateData = {
-            settings: {
-                companyName: settings.companyName || 'IDEAZONE',
-                companyAddress: settings.address || 'Address: XXX-XXX-XXXX',
-                companyMobile: settings.companyMobile || 'Phone: XXX-XXX-XXXX',
-                logo: logoUrl,
-            },
-            newSale: {
-                cashierUsername: sale.cashierUsername || '',
-                invoiceNumber: sale.invoiceNumber || '',
-                date: sale.date ? formatDate(sale.date) : '',
-                customer: sale.customer || '',
-                productsData: sale.productsData.map(product => ({
+    // Fetch warranty information from actual products for each item in the sale
+    const enhancedProductsData = await Promise.all(
+      sale.productsData.map(async (saleProduct) => {
+        try {
+          const actualProduct = await Product.findById(saleProduct.currentID).lean();
+          console.log('Product warranty debug:', {
+            productId: saleProduct.currentID,
+            productName: saleProduct.name,
+            saleWarranty: saleProduct.warranty,
+            actualWarranty: actualProduct ? actualProduct.warranty : 'No product found',
+            actualProduct: actualProduct ? true : false
+          });
+          
+          return {
+            ...saleProduct,
+            // Use actual product warranty if available, otherwise use what's in the sale
+            warranty: actualProduct && actualProduct.warranty ? actualProduct.warranty : saleProduct.warranty
+          };
+        } catch (error) {
+          console.error('Error fetching product warranty:', error);
+          return saleProduct;
+        }
+      })
+    );
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const logoUrl = settings.logo
+        ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
+        : null;
+
+    // Debug log for settings
+    console.log('Print Invoice Settings:', {
+        hasSettings: !!settings,
+        companyEmail: settings.companyEmail,
+        fullSettings: settings
+    });
+
+    const templateData = {
+        settings: {
+            companyName: settings.companyName || 'IDEAZONE',
+            companyAddress: settings.address || 'Address: XXX-XXX-XXXX',
+            companyMobile: settings.companyMobile || 'Phone: XXX-XXX-XXXX',
+            companyEmail: settings.email || 'info@xlink.lk',
+            logo: logoUrl,
+        },
+        newSale: {
+            cashierUsername: sale.cashierUsername || '',
+            invoiceNumber: sale.invoiceNumber || '',
+            date: sale.date ? formatDate(sale.date) : '',
+            customer: customerName,
+            productsData: enhancedProductsData.map(product => {
+                console.log('Template warranty debug:', {
                     name: product.name,
-                    warranty: product.warranty || '',
+                    warranty: product.warranty,
+                    warrantyType: typeof product.warranty,
+                    warrantyLength: product.warranty ? product.warranty.length : 'N/A'
+                });
+                return {
+                    name: product.name,
                     price: product.price,
                     appliedWholesale: product.appliedWholesale,
                     quantity: product.quantity,
+                    warranty: product.warranty, // This should now have the actual warranty
                     subtotal: product.subtotal,
                     taxRate: product.taxRate || 0,
                     taxType: product.taxType || 'exclusive',
-                })),
-                baseTotal: sale.baseTotal || 0,
-                grandTotal: sale.grandTotal,
-                discount: sale.discountValue || 0,
-                cashBalance: sale.cashBalance || 0,
-                paymentType: sale.paymentType,
-                note:
-          sale.note && sale.note !== "null" && sale.note.trim() !== ""
-            ? sale.note
-            : "",
-        claimedPoints: sale.claimedPoints || 0,
-        redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
-            },
-        };
+                };
+            }),
+            baseTotal: sale.baseTotal || 0,
+            grandTotal: sale.grandTotal,
+            discount: sale.discountValue || 0,
+            cashBalance: sale.cashBalance || 0,
+            paymentType: sale.paymentType,
+            note: sale.note && sale.note !== "null" && sale.note.trim() !== ""
+                ? sale.note
+                : "",
+            claimedPoints: sale.claimedPoints || 0,
+            redeemedPointsFromSale: sale.redeemedPointsFromSale || 0,
+        },
+    };
+
+    // Register Handlebars helpers
+    Handlebars.registerHelper("isEmpty", function (value) {
+        return !value || value === "" || value === null || value === undefined;
+    });
+
+    Handlebars.registerHelper("hasWarranty", function (warranty) {
+        return warranty && warranty.trim && warranty.trim() !== "";
+    });
+
+    Handlebars.registerHelper("isValidNote", function (note, options) {
+        return note &&
+            note !== null &&
+            note !== "null" &&
+            note.toString().trim() !== ""
+            ? options.fn(this)
+            : options.inverse(this);
+    });
 
     const invoiceTemplate = `
         <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
-            <style>
-                /* Base Styles */
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                }
-                    {
-                        width: "148mm", // A5 landscape width
-                        minHeight: "210mm", // A5 landscape height
-                        margin: "0 auto",
-                        boxShadow: "none",
-                        pageBreakInside: "avoid"
-                    }
-                
-                <div style="font-family: Arial, sans-serif; position: absolute; left: 0; top: 0;">
             <style>
                 /* Base Styles */
                 body {
@@ -2426,17 +2500,17 @@ const printInvoice = async (req, res) => {
                     color: #000000;
                 }
                 
-                /* Divider Line */
+               /* Divider Line */
                 .divider {
                     width: 100%;
                     border-top: 1px solid #000;
                     margin: 8px 0;
                     margin-top: 30px
-                }
+                } 
                 
                 /* Products Section */
                 .products-section {
-                    margin-top: 40px;
+                    margin-top: 8px;
                 }
                 
                 .products-header {
@@ -2498,19 +2572,21 @@ const printInvoice = async (req, res) => {
                     text-align: right;
                 }
                 
-                .payment-item {
-                    margin-bottom: 3px;
+        .payment-item {
+          margin-bottom: 3px;
+          font-size: 12px;
                 }
                 
                 .summary-row {
                     display: flex;
                     justify-content: space-between;
-                    margin-bottom: 3px;
+          margin-bottom: 1px;
+          font-size: 12px;
                 }
                 
                 .summary-row.total {
-                    font-size: 16px;
-                    margin-top: 5px;
+          font-size: 12px;
+          margin-top: 5px;
                 }
 
                 .system-by {
@@ -2529,67 +2605,86 @@ const printInvoice = async (req, res) => {
                     <!-- Logo Container -->
                     <div style="overflow: hidden; display: flex; justify-content: center; align-items: center; ">
                     <img src="{{settings.logo}}" alt="Logo" style="max-height: 100px; max-width: 100%; margin: 2px auto;">
-                    </div>
+              </div>
                 </div>
 
                 <!-- Invoice Meta Section -->
                 <div class="invoice-meta">
                     <!-- Left: Invoice Meta Data -->
                     <div class="meta-left">
-                        <div class="meta-item"><b>Invoice No.</b> {{newSale.invoiceNumber}}</div>
-                        <div class="meta-item"><b>Customer</b></div>
-                        <div class="meta-item">{{newSale.customer}}</div>
-                        <div class="meta-item"><b>Mobile:</b> {{formatMobile settings.companyMobile}}</div>
+                        <div class="meta-item" style="font-size:14px;"><b>{{settings.companyName}}</br>{{settings.companyAddress}}</div>
+                        <div class="meta-item" style="font-size:14px;"><b>Mobile:</b> {{settings.companyMobile}} / 076 247 3808</div>
+                        <div class="meta-item" style="font-size:14px;"><b>Email:</b> {{settings.companyEmail}} </div>
+            <div class="meta-item" style="font-size:14px;"> <br>
+            <b>Bill To:</b> <b>{{newSale.customer}}</b>
+            </div>
                     </div>
 
+                  
                     <!-- Right: Date -->
                     <div class="meta-right">
-                        <div class="meta-item"><b>Date</b> {{newSale.date}}</div>
+                    <div style="text-align: right; margin-bottom: 5px;">
+                            <b style="font-size: 26px;">INVOICE</b>
+                        </div>
+                        <table style="border-collapse: collapse; margin-left: auto;">
+                            <tr>
+                                <td style="border: 1px solid black; padding: 4px 8px;"><b>Date:</b></td>
+                                <td style="border: 1px solid black; padding: 4px 8px;">{{newSale.date}}</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 1px solid black; padding: 4px 8px;"><b>Sale No:</b></td>
+                                <td style="border: 1px solid black; padding: 4px 8px;">{{newSale.invoiceNumber}}</td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
 
-                <!-- Products Section -->
+             <!-- Products Section -->
                 <div class="products-section">
-                    <div class="products-header">
-                        <div class="col-product">Product</div>
-                        <div class="col-quantity">Quantity</div>
-                        <div class="col-price">Unit Price</div>
-                        <div class="col-subtotal">Subtotal</div>
-                    </div>
-
-                    {{#each newSale.productsData}}
-                    <div class="product-row">
-                        <div class="col-product">
-                            <div class="product-name">
-                                {{this.name}}
-                                {{#if this.appliedWholesale}}
-                                    <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
-                                        W
-                                    </span>
-                                {{/if}}
-                            </div>
-                        </div>
-                        <div class="col-quantity">{{this.quantity}} pcs</div>
-                        <div class="col-price">{{formatCurrency this.price}}</div>
-                        <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
-                    </div>
-                    {{/each}}
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border: 1px solid black;">
+                                <th style="border: 1px solid black; padding: 8px; text-align: left;">Description</th>
+                                <th style="border: 1px solid black; padding: 8px; text-align: center;">Qty</th>
+                                <th style="border: 1px solid black; padding: 8px; text-align: right;">Rate</th>
+                                <th style="border: 1px solid black; padding: 8px; text-align: right;">Amount (LKR)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{#each newSale.productsData}}
+                            <tr style="border: 1px solid black;">
+                                <td style="border: 1px solid black; padding: 8px; text-align: left;">
+                                    {{this.name}}
+                                    {{#if this.warranty}}
+                                        <br>
+                                        <span style="font-size: 10px; color: #000000ff;">Warranty: {{this.warranty}}</span>
+                                    {{/if}}
+                                    {{#if this.appliedWholesale}}
+                                        <span style="display: inline-block; background-color: #f3f4f6; color: #000000; border: 1px solid #000000; border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: bold; margin-left: 4px;">
+                                            W
+                                        </span>
+                                    {{/if}}
+                                </td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: center;">{{this.quantity}} pcs</td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: right;">{{formatCurrency this.price}}</td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: right;">LKR {{formatCurrency this.subtotal}}</td>
+                            </tr>
+                            {{/each}}
+                            <tr style="border: 1px solid black; font-weight: bold;">
+                                <td colspan="3" style="border: 1px solid black; padding: 8px; text-align: right;">Total:</td>
+                                <td style="border: 1px solid black; padding: 8px; text-align: right;">LKR {{formatCurrency newSale.baseTotal}}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="divider"></div>
 
                 <!-- Payment Summary -->
                 <div class="payment-summary">
-                    <div class="payment-left">
-                        {{#each newSale.paymentType}}
-                        <div class="payment-item">
-                            <b>{{this.type}}</b> {{formatCurrency this.amount}}
-                        </div>
-                        {{/each}}
-                        <div class="payment-item">
-                            <b>Total Paid</b> {{formatCurrency newSale.grandTotal}}
-                        </div>
-                    </div>
+          <div class="payment-left">
+            
+          </div>
 
                     <div class="payment-right">
                         <!-- Loyalty Points Section (Before Subtotal) -->
@@ -2605,15 +2700,15 @@ const printInvoice = async (req, res) => {
                         <!-- Calculate subtotal as sum of all products -->
                         <div class="summary-row">
                             <span><b>Subtotal:</b></span>
-                            <span>Rs {{formatCurrency newSale.baseTotal}}</span>
+                            <span>LKR {{formatCurrency newSale.baseTotal}}</span>
                         </div>
                         <div class="summary-row">
                             <span><b>Discount</b></span>
-                            <span>(-) Rs {{formatCurrency newSale.discount}}</span>
+                            <span>(-) LKR {{formatCurrency newSale.discount}}</span>
                         </div>
                         <div class="summary-row total">
                             <span><b>Total:</b></span>
-                            <span>Rs {{formatCurrency newSale.grandTotal}}</span>
+                            <span>LKR {{formatCurrency newSale.grandTotal}}</span>
                         </div>
                     </div>
                 </div>
@@ -2626,21 +2721,27 @@ const printInvoice = async (req, res) => {
                     </div>
                 {{/isValidNote}}
 
+          <!-- Terms and Conditions Section -->
+          <div style="position: absolute; left: 10mm; bottom: 10mm; width: 60%; font-size: 10px; color: #333; text-align: left; line-height: 1.4;">
+            <b>Terms and Conditions</b>
+            <ul style="padding-left: 16px; margin: 6px 0 0 0;">
+              <li>14 days required for warranty coverage.</li>
+              <li>Burn marks, physical damage, and corrosion are not covered by warranty.</li>
+              <li>Warranty covers only manufacturer’s defects. Damage or defects caused by negligence, misuse, improper operation, power fluctuation, lightning, or other natural disasters are not covered.</li>
+              <li>Sabotage or accidents are not included under this warranty.</li>
+              <li>Invoice must be produced for warranty claims. Warranty is void if the sticker is removed or damaged.</li>
+              <li>Goods once sold are not returnable under any circumstances.</li>
+               </ul>
+              <br>
+              <b>THANK YOU FOR YOUR BUSINESS!</b>
+           
+          </div>
+
                 </div>
             </div>
         </div>`;
 
-    Handlebars.registerHelper("isValidNote", function (note, options) {
-      // Check if note is valid (not null, undefined, "null", or empty/whitespace only)
-      return note &&
-        note !== null &&
-        note !== "null" &&
-        note.toString().trim() !== ""
-        ? options.fn(this)
-        : options.inverse(this);
-    });
-
-    const compiledTemplate = Handlebars.compile(invoiceTemplate); //  reuse the same template string
+    const compiledTemplate = Handlebars.compile(invoiceTemplate);
     const html = compiledTemplate(templateData);
 
     res.status(200).json({ html, status: "success" });

@@ -20,6 +20,7 @@ const productSchema = new mongoose.Schema({
   ptype: { type: String, required: true },
   discount: { type: Number },
   specialDiscount: { type: Number },
+  warranty: { type: String, default: null },
   variationValue: { type: String },
   quantity: { type: Number, required: true },
   stockQty: { type: Number },
