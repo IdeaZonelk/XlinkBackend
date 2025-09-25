@@ -178,6 +178,8 @@ router.get('/findProductForUpdate/:id', productController.findProductForUpdate);
 
 router.get('/findAllService', serviceController.findAllService);
 
+router.get('/findAllServiceNoPagination', serviceController.findAllServiceNoPagination);
+
 router.get('/getServiceForUpdate/:id', serviceController.getServiceForUpdate);
 
 router.get('/searchService', serviceController.searchService);
@@ -297,6 +299,7 @@ router.get('/searchExpense', expensesController.searchExpense)
 router.get('/searchExpenseCategory', expensesCatController.searchExpenseCategory)
 router.get('/searchAdjustment', adjustmentController.searchAdjustment)
 router.get('/fetchAllBrandsNoPagination', brandsController.fetchAllBrandsNoPagination);
+router.get('/searchService', serviceController.searchService);
 
 // Define the endpoint to fetch sales data by month
 router.get('/sales/monthly', async (req, res) => {

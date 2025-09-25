@@ -553,6 +553,7 @@ const createSale = async (req, res) => {
                     discount: product.discount || 0,
                     taxRate: product.taxRate || 0,
                     taxType: product.taxType || 'exclusive',
+                    isService: product.isService || false, // Add isService flag for receipt templates
                 })),
                 baseTotal: newSale.baseTotal || 0,
                 grandTotal: newSale.grandTotal || 0,
@@ -717,99 +718,168 @@ const createNonPosSale = async (req, res) => {
 
 
     const productsData = saleData.productsData;
+    console.log('Non-POS Products data received:', JSON.stringify(productsData, null, 2));
+    
+    // Debug each product to see structure
+    productsData.forEach((product, index) => {
+      console.log(`Non-POS Product ${index}:`, {
+        name: product.name,
+        currentID: product.currentID,
+        _id: product._id,
+        id: product.id,
+        isService: product.isService,
+        currentIDType: typeof product.currentID,
+        isValidObjectId: product.currentID ? mongoose.Types.ObjectId.isValid(product.currentID) : false,
+        allKeys: Object.keys(product),
+        fullProduct: JSON.stringify(product, null, 2)
+      });
+    });
 
     // Prepare update promises for product quantities
     const updatePromises = productsData.map(async (product) => {
-      const { currentID, quantity, stockQty, ptype, warehouse, isService } = product;
+      // Check all possible ID properties and use the first valid one
+      const possibleIds = [product.currentID, product._id, product.id, product.serviceId, product.productId];
+      const currentID = possibleIds.find(id => id && mongoose.Types.ObjectId.isValid(id));
+      
+      console.log(`🔍 ID Detection for ${product.name}:`, {
+        possibleIds,
+        selectedID: currentID,
+        isService: product.isService
+      });
+      
+      if (!currentID) {
+        console.error(`❌ No valid ID found for product/service:`, product);
+        throw new Error(`No valid ID found for product/service: ${product.name || 'Unknown'}`);
+      }
+
+      const {
+        quantity,
+        ptype,
+        warehouse,
+        variationValue,
+        batchNumber,
+        isWeight,
+        isService,
+      } = product;
+
+      console.log(`Processing Non-POS product: ${currentID}, isService: ${isService}, name: ${product.name}`);
+
+      // First check if this is a service by trying to find it in Service collection
+      let isActuallyService = isService;
+      if (!isActuallyService && mongoose.Types.ObjectId.isValid(currentID)) {
+        try {
+          const serviceCheck = await Service.findById(currentID);
+          if (serviceCheck) {
+            isActuallyService = true;
+            console.log(`✅ Detected service by ID lookup in Non-POS: ${currentID}`);
+          }
+        } catch (err) {
+          console.log(`🔍 Service lookup failed (normal for products): ${err.message}`);
+        }
+      }
 
       // Skip inventory updates for services
-      if (isService) {
-        console.log(`Skipping inventory update for service in createNonPosSale: ${currentID}`);
-        // Validate service exists
-        const serviceExists = await Service.findById(currentID);
-        if (!serviceExists) {
-          return Promise.reject({
-            message: `Service not found with ID: ${currentID}`,
-            status: "unsuccess",
-          });
+      if (isActuallyService) {
+        console.log(`✅ Skipping inventory update for service in createNonPosSale: ${currentID}`);
+        try {
+          // Validate service exists
+          const serviceExists = await Service.findById(currentID);
+          if (!serviceExists) {
+            throw new Error(`Service not found with ID: ${currentID}`);
+          }
+          console.log(`✅ Service validation successful: ${serviceExists.serviceName}`);
+          return Promise.resolve(); // Services don't need inventory updates
+        } catch (err) {
+          console.error(`❌ Service validation failed:`, err);
+          throw err;
         }
-        return Promise.resolve(); // Services don't need inventory updates
       }
 
-      if (!mongoose.Types.ObjectId.isValid(currentID)) {
-        return Promise.reject({
-          message: `Invalid product ID: ${currentID}`,
-          status: "unsuccess",
-        });
-      }
+      // Only validate ObjectId and find product if it's not a service
+      console.log(`🔍 Processing regular product: ${currentID}`);
 
       if (!warehouse) {
-        return Promise.reject({
-          message: `Warehouse not provided for product with ID: ${currentID}`,
-          status: "unsuccess",
-        });
+        throw new Error(
+          `Warehouse not provided for product with ID: ${currentID}`
+        );
       }
 
       const updatedProduct = await Product.findById(currentID);
       if (!updatedProduct) {
-        return Promise.reject({
-          message: `Product not found with ID: ${currentID}`,
-          status: "unsuccess",
-        });
+        throw new Error(`Product not found with ID: ${currentID}`);
       }
 
       const warehouseData = updatedProduct.warehouse.get(warehouse);
       if (!warehouseData) {
-        console.error(
-          `Error: Warehouse ${warehouse} not found for product ID: ${currentID}`
+        throw new Error(
+          `Warehouse ${warehouse} not found for product with ID: ${currentID}`
         );
-        return Promise.reject({
-          message: `Warehouse with ID ${warehouse} not found for product with ID: ${currentID}`,
-          status: "unsuccess",
-        });
       }
 
-      if (ptype === "Single") {
-        console.log(
-          `Debug: Current stock for product ${currentID} in warehouse ${warehouse}:`,
-          warehouseData.productQty
-        );
+      // Products with batches
+      if (updatedProduct.hasBatches) {
+        if (!batchNumber) {
+          throw new Error(
+            `Batch number is required for product with ID: ${currentID} (has batches)`
+          );
+        }
+        const batchInfo = warehouseData.batches.find(b => b.batchNumber === batchNumber);
+        if (!batchInfo) {
+          throw new Error(
+            `Batch ${batchNumber} not found for product with ID: ${currentID}`
+          );
+        }
+
+        if (batchInfo.quantity < quantity) {
+          throw new Error(
+            `Insufficient batch stock for product ${currentID}, batch ${batchNumber} (Available: ${batchInfo.quantity}, Required: ${quantity})`
+          );
+        }
+
+        batchInfo.quantity -= quantity;
+        if (batchInfo.quantity === 0) {
+          const batchIndex = warehouseData.batches.findIndex(b => b.batchNumber === batchNumber);
+          warehouseData.batches.splice(batchIndex, 1);
+        }
+      } else if (ptype === "Single") {
+        // Weight products
+        if (isWeight && updatedProduct.isWeight) {
+          console.log(
+            `Processing weight-based product: ${currentID}, available: ${warehouseData.productQty}, required: ${quantity}`
+          );
+        } else {
+          // Regular single products
+          console.log(
+            `Processing single product: ${currentID}, available: ${warehouseData.productQty}, required: ${quantity}`
+          );
+        }
 
         if (warehouseData.productQty < quantity) {
-          console.error(
-            `Error: Insufficient stock for product ${currentID} (Available: ${warehouseData.productQty}, Required: ${quantity})`
+          throw new Error(
+            `Insufficient stock for product ${currentID} (Available: ${warehouseData.productQty}, Required: ${quantity})`
           );
-          return Promise.reject({
-            message: `Insufficient stock for product with ID: ${currentID}`,
-            status: "unsuccess",
-          });
         }
 
         warehouseData.productQty -= quantity;
       } else if (ptype === "Variation") {
-        const variationKey = product.variationValue;
+        const variationKey = variationValue;
         const variation = warehouseData.variationValues?.get(variationKey);
 
         if (!variation) {
-          return Promise.reject({
-            message: `Variation ${variationKey} not found for product with ID: ${currentID}`,
-            status: "unsuccess",
-          });
+          throw new Error(
+            `Variation ${variationKey} not found for product with ID: ${currentID}`
+          );
         }
 
         if (variation.productQty < quantity) {
-          return Promise.reject({
-            message: `Insufficient stock for variation ${variationKey} of product with ID: ${currentID}`,
-            status: "unsuccess",
-          });
+          throw new Error(
+            `Insufficient stock for variation ${variationKey} of product with ID: ${currentID} (Available: ${variation.productQty}, Required: ${quantity})`
+          );
         }
 
         variation.productQty -= quantity;
       } else {
-        return Promise.reject({
-          message: `Invalid product type for product with ID: ${currentID}`,
-          status: "unsuccess",
-        });
+        throw new Error(`Invalid product type for product with ID: ${currentID}`);
       }
 
       updatedProduct.warehouse.set(warehouse, warehouseData);
@@ -950,6 +1020,7 @@ try {
           specialDiscount: product.specialDiscount || 0,
           discount: product.discount || 0,
           taxRate: product.taxRate || 0,
+          isService: product.isService || false, // Add isService flag for receipt templates
         })),
         baseTotal: newSale.baseTotal || 0,
         grandTotal: newSale.grandTotal || 0,
@@ -1454,19 +1525,51 @@ const updateSale = async (req, res) => {
           } = product;
           const warehouse = product.warehouse || updateData.warehouse;
 
-          // Skip inventory updates for services
-          if (isService) {
-            console.log(`Skipping inventory update for service in updateSale: ${currentID}`);
-            return;
-          }
-
           console.log(
-            "🔖 Processing Product:",
+            "🔖 Processing Item:",
             currentID,
+            "| IsService flag:",
+            isService,
+            "| Name:",
+            product.name,
             "| Warehouse:",
             warehouse
           );
 
+          // First check if this is a service by trying to find it in Service collection (same logic as Create Sale)
+          let isActuallyService = isService;
+          if (!isActuallyService && mongoose.Types.ObjectId.isValid(currentID)) {
+            try {
+              const serviceCheck = await Service.findById(currentID);
+              if (serviceCheck) {
+                isActuallyService = true;
+                console.log(`✅ Detected service by ID lookup in updateSale: ${currentID} (${serviceCheck.serviceName})`);
+              }
+            } catch (err) {
+              console.log(`🔍 Service lookup failed (normal for products): ${err.message}`);
+            }
+          }
+
+          // Skip inventory updates for services
+          if (isActuallyService) {
+            console.log(`✅ Skipping inventory update for service in updateSale: ${currentID}`);
+            // Validate service exists
+            try {
+              const serviceExists = await Service.findById(currentID);
+              if (!serviceExists) {
+                errors.push(`Service not found with ID: ${currentID}`);
+                return;
+              }
+              console.log(`✅ Service validation successful: ${serviceExists.serviceName}`);
+            } catch (err) {
+              console.error(`❌ Service validation failed:`, err);
+              errors.push(`Service validation failed with ID: ${currentID}`);
+            }
+            return;
+          }
+
+          // Only process as product if it's not a service
+          console.log(`🔍 Processing as regular product: ${currentID}`);
           const updatedProduct = await Product.findById(currentID);
           if (!updatedProduct) {
             errors.push(`Product not found with ID: ${currentID}`);
@@ -2059,6 +2162,7 @@ const fetchTodaySales = async (req, res) => {
             stockQty = selectedWarehouse.productQty || "";
             productCost = selectedWarehouse.productCost || "";
           }
+
 
           return {
             currentID: productData.currentID,
@@ -2779,7 +2883,7 @@ const printInvoice = async (req, res) => {
                                 {{/if}}
                             </div>
                         </div>
-                        <div class="col-quantity">{{this.quantity}} pcs</div>
+                        <div class="col-quantity">{{this.quantity}} </div>
                         <div class="col-price">{{formatCurrency this.price}}</div>
                         <div class="col-subtotal">{{formatCurrency this.subtotal}}</div>
                     </div>

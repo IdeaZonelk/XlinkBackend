@@ -31,6 +31,9 @@ const productSchema = new mongoose.Schema({
   wholesaleEnabled: { type: Boolean, default: false },
   wholesaleMinQty: { type: Number, default: 0 },
   wholesalePrice: { type: Number, default: 0 },
+  isService: { type: Boolean, default: false },
+  serviceCode: { type: String },
+  description: { type: String },
 
 });
 

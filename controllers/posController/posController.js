@@ -21,6 +21,7 @@ const fs = require('fs');
 const ZReading = require('../../models/zBillRecord');
 const mongoose = require('mongoose');
 const { log } = require('console');
+const Service = require('../../models/products/productService');
 
 const cashHandIn = async (req, res) => {
     const { cashAmount, username, name, openTime,

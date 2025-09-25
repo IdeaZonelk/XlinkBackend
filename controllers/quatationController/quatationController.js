@@ -11,15 +11,21 @@
 
 const Quatation = require('../../models/quatationModel')
 const Product = require('../../models/products/product');
+const Service = require('../../models/products/productService'); // Add Service model
 const Customers = require('../../models/customerModel');
 const mongoose = require('mongoose');
 
 //Create a quotation
 const createQuatation = async (req, res) => {
     try {
+        console.log('=== QUOTATION CREATION DEBUG ===');
         const qatationData = req.body;
+        console.log('Received quotation data:', JSON.stringify(qatationData, null, 2));
+        
         const newQuatation = new Quatation(qatationData);
         const productsData = qatationData.productsData; // Extracting productsData from the sale data
+        
+        console.log('Products data:', JSON.stringify(productsData, null, 2));
 
         // Validate required fields
         if (!qatationData.warehouse) {
@@ -32,12 +38,27 @@ const createQuatation = async (req, res) => {
             return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
         }
 
-        // Prepare update promises for product quantities
-        const updatePromises = productsData.map(async (product) => {
-            const { currentID, quantity, ptype } = product; // Extract details from product
+        // Prepare update promises for product quantities with service support
+        const updatePromises = productsData.map(async (product, index) => {
+            console.log(`\n--- Processing item ${index} ---`);
+            const { currentID, quantity, ptype, isService } = product; // Extract details from product
+            console.log(`Item ${index} details:`, {
+                currentID,
+                quantity,
+                ptype,
+                isService,
+                name: product.name,
+                productKeys: Object.keys(product)
+            });
 
             // Validate the current ID
+            if (!currentID) {
+                console.error(`Item ${index} has no currentID:`, product);
+                throw new Error(`Missing product ID for item ${index}: ${product.name || 'Unknown'}`);
+            }
+            
             if (!mongoose.Types.ObjectId.isValid(currentID)) {
+                console.error(`Item ${index} has invalid currentID:`, currentID);
                 throw new Error(`Invalid product ID: ${currentID}`);
             }
 
@@ -45,6 +66,28 @@ const createQuatation = async (req, res) => {
             if (typeof quantity !== 'number' || quantity < 0) {
                 throw new Error(`Invalid Product Quantity for Product Id: ${currentID}`);
             }
+
+            // If it's a service, validate it exists in Service collection
+            if (isService === true || ptype === 'Service') {
+                console.log(`Item ${index} is a service, validating...`);
+                const serviceExists = await Service.findById(currentID);
+                if (!serviceExists) {
+                    console.error(`Service not found for ID: ${currentID}`);
+                    throw new Error(`Service not found: ${currentID}`);
+                }
+                console.log(`✓ Validated service: ${serviceExists.serviceName || serviceExists.name}`);
+                // Services don't need stock validation, just existence validation
+                return;
+            }
+
+            // For regular products, validate they exist in Product collection
+            console.log(`Item ${index} is a product, validating...`);
+            const productExists = await Product.findById(currentID);
+            if (!productExists) {
+                console.error(`Product not found for ID: ${currentID}`);
+                throw new Error(`Product not found: ${currentID}`);
+            }
+            console.log(`✓ Validated product: ${productExists.name}`);
         });
 
         // Wait for all updates to complete and handle any errors
