@@ -15,6 +15,7 @@ const Product = require('../../models/products/product');
 const mongoose = require('mongoose');
 const generateReferenceId = require('../../utils/generateReferenceID');
 const { isEmpty } = require('lodash')
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 //Return the purchase
 const returnPurchase = async (req, res) => {
@@ -30,6 +31,9 @@ const returnPurchase = async (req, res) => {
         returnData.returnAmount = returnAmount;
         returnData.returnTax = returnTax;
         returnData.returnDiscount = returnDiscount;
+        
+        // Always use server UTC time, ignore any frontend date
+        returnData.date = new Date();
 
         if (isEmpty(returnData.warehouse)) {
             return res.status(400).json({ message: 'Warehouse is required.', status: 'unsuccess' });
@@ -37,9 +41,7 @@ const returnPurchase = async (req, res) => {
         if (isEmpty(returnData.supplier)) {
             return res.status(400).json({ message: 'Supplier is required.', status: 'unsuccess' });
         }
-        if (isEmpty(returnData.date)) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        // Note: Date validation removed since we automatically set server time
 
         // Save the purchase return data in the PurchaseReturn collection
         const newPurchaseReturn = new PurchaseReturn({
@@ -152,10 +154,29 @@ const returnPurchase = async (req, res) => {
             await product.save();
         }
 
+        // Log formatted creation time for purchase return
+        const formattedReturnTime = formatToSriLankaTime(savedReturn.date);
+        console.log("✅ Purchase Return Created Successfully:", {
+            referenceId: savedReturn.refferenceId,
+            createdAt: formattedReturnTime.full,
+            createdAtISO: formattedReturnTime.iso,
+            supplier: savedReturn.supplier,
+            returnAmount: savedReturn.returnAmount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+        
         await session.commitTransaction();
         res.status(201).json({
             message: 'Purchase return processed successfully. Stock updated but original purchase remains unchanged.',
-            purchaseReturn: savedReturn,
+            purchaseReturn: {
+                ...savedReturn.toObject(),
+                formattedDate: {
+                    full: formattedReturnTime.full,
+                    dateOnly: formattedReturnTime.dateOnly,
+                    timeOnly: formattedReturnTime.timeOnly,
+                    iso: formattedReturnTime.iso
+                }
+            },
         });
     } catch (error) {
         console.error('Error processing purchase return:', error);
@@ -327,10 +348,24 @@ const fetchAllPurchaseReturns = async (req, res) => {
 
             const total = await PurchaseReturn.countDocuments();
             const totalPages = Math.ceil(total / size);
+            
+            // Add formatted dates to paginated purchase returns
+            const returnsWithFormattedDates = purchaseReturns.map(purchaseReturn => {
+                const formattedTime = formatToSriLankaTime(purchaseReturn.date);
+                return {
+                    ...purchaseReturn.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
 
             return res.status(200).json({
                 message: 'Purchase returns fetched successfully with pagination',
-                data: purchaseReturns,
+                data: returnsWithFormattedDates,
                 total,
                 totalPages,
                 currentPage: number,
@@ -340,9 +375,24 @@ const fetchAllPurchaseReturns = async (req, res) => {
 
         // Fetch all without pagination if no pagination queries are provided
         const purchaseReturns = await PurchaseReturn.find();
+        
+        // Add formatted dates to all purchase returns
+        const returnsWithFormattedDates = purchaseReturns.map(purchaseReturn => {
+            const formattedTime = formatToSriLankaTime(purchaseReturn.date);
+            return {
+                ...purchaseReturn.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
         return res.status(200).json({
             message: 'Purchase returns fetched successfully',
-            data: purchaseReturns
+            data: returnsWithFormattedDates
         });
     } catch (error) {
         console.error('Error fetching purchase returns:', error);
@@ -444,11 +494,29 @@ const findPurchaseReturnById = async (req, res) => {
             };
         });
 
+        // Format the purchase return date for display
+        const formattedReturnDate = formatToSriLankaTime(purchase.date);
+        
         // Combine purchase with the updated product details
         const purchaseWithUpdatedProducts = {
             ...purchase, // Spread existing purchase fields
-            productsData: updatedProductsData // Attach updated products data
+            productsData: updatedProductsData, // Attach updated products data
+            formattedDate: {
+                full: formattedReturnDate.full,
+                dateOnly: formattedReturnDate.dateOnly,
+                timeOnly: formattedReturnDate.timeOnly,
+                iso: formattedReturnDate.iso
+            }
         };
+
+        console.log("🔍 Purchase Return Fetched Successfully:", {
+            referenceId: purchase.refferenceId,
+            returnDate: formattedReturnDate.full,
+            returnISO: formattedReturnDate.iso,
+            supplier: purchase.supplier,
+            returnAmount: purchase.returnAmount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
 
         // Send the updated purchase data
         res.status(200).json(purchaseWithUpdatedProducts);
@@ -485,9 +553,7 @@ const updatePurchaseReturn = async (req, res) => {
         if (isEmpty(updateData.supplier)) {
             return res.status(400).json({ message: 'Supplier is required.', status: 'unsuccess' });
         }
-        if (isEmpty(updateData.date)) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        // Note: Date validation removed - backend automatically handles purchase return date with existing date
 
         // Extract product data to update the stock
         const productsData = updateData.productsData;
@@ -653,9 +719,24 @@ const fetchPurchaseReturns = async (req, res) => {
 
         // If no keyword, fetch all purchase returns
         purchaseReturns = await PurchaseReturn.find();
+        
+        // Add formatted dates to all purchase returns
+        const returnsWithFormattedDates = purchaseReturns.map(purchaseReturn => {
+            const formattedTime = formatToSriLankaTime(purchaseReturn.date);
+            return {
+                ...purchaseReturn.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
         return res.status(200).json({
             message: 'Purchase returns fetched successfully',
-            purchaseReturns
+            purchaseReturns: returnsWithFormattedDates
         });
 
     } catch (error) {
@@ -744,6 +825,7 @@ const searchPurchaseReturns = async (req, res) => {
         // Format purchase return data if additional processing is needed
         const formattedPurchaseReturns = purchaseReturns.map((purchaseReturn) => {
             const returnObj = purchaseReturn.toObject();
+            const formattedTime = formatToSriLankaTime(returnObj.date);
 
             return {
                 _id: returnObj._id,
@@ -755,10 +837,16 @@ const searchPurchaseReturns = async (req, res) => {
                 paidAmount: returnObj.paidAmount,
                 grandTotal: returnObj.grandTotal,
                 date: returnObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 warehouse: returnObj.warehouse,
                 status: returnObj.status, // Example field, adjust based on your schema
                 createdAt: returnObj.createdAt
-                    ? returnObj.createdAt.toISOString().slice(0, 10)
+                    ? formatToSriLankaTime(returnObj.createdAt).dateOnly
                     : null,
             };
         });

@@ -24,6 +24,7 @@ const io = require("../../server");
 const Handlebars = require("handlebars");
 const moment = require("moment-timezone");
 const receiptSettingsSchema = require("../../models/receiptSettingsModel");
+const { formatToSriLankaTime } = require("../../utils/timeZone");
 const {
   generateReceiptEighty,
   getBarcodeScriptEighty,
@@ -39,9 +40,9 @@ const {
 
 const formatDate = (date) => {
   if (!date) return "";
-  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
-  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
-  return sriLankanTime.format("MMM DD, YYYY HH:mm");
+  // Convert UTC time to Sri Lankan time using timeZone utility
+  const sriLankanTime = formatToSriLankaTime(date);
+  return sriLankanTime ? sriLankanTime.full : "";
 };
 
 Handlebars.registerHelper("formatPaymentType", function (type) {
@@ -61,6 +62,8 @@ Handlebars.registerHelper("formatCurrency", function (number) {
 });
 
 const createSale = async (req, res) => {
+  
+  
   try {
     const saleData = req.body;
     if (!saleData.invoiceNumber) {
@@ -79,7 +82,8 @@ const createSale = async (req, res) => {
     const referenceId = await generateReferenceId("SALE");
     saleData.refferenceId = referenceId;
     saleData.invoiceNumber = saleData.invoiceNumber;
-    saleData.date = new Date(); // POS sale uses server UTC time, not frontend time
+    // Always use server UTC time, ignore any frontend date
+    saleData.date = new Date();
 
     const settings = await Settings.findOne();
     if (!settings || !settings.defaultWarehouse) {
@@ -349,7 +353,7 @@ const createSale = async (req, res) => {
           saleId: newSale._id,
           amountToPay: newSale.grandTotal,
           payingAmount: payment.amount,
-          currentDate: newSale.date || new Date(),
+          currentDate: newSale.date || date,
           paymentType: payment.type,
         }));
         await SalePayment.insertMany(paymentsToInsert);
@@ -442,9 +446,9 @@ const createSale = async (req, res) => {
 
     const formatDate = (date) => {
       if (!date) return "";
-      // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
-      const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
-      return sriLankanTime.format("MMM DD, YYYY HH:mm");
+      // Convert UTC time to Sri Lankan time using timeZone utility
+      const sriLankanTime = formatToSriLankaTime(date);
+      return sriLankanTime ? sriLankanTime.full : "";
     };
 
     const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
@@ -484,7 +488,7 @@ const createSale = async (req, res) => {
             newSale: {
                 cashierUsername: newSale.cashierUsername || '',
                 invoiceNumber: newSale.invoiceNumber || '',
-                date: formatDate(newSale.date),
+                date: formatToSriLankaTime(newSale.date).full || '',
                 customer: newSale.customerName || newSale.customer || 'Unknown',
                 customerName: newSale.customerName || 'Unknown',
                 productsData: saleData.productsData.map(product => ({
@@ -563,11 +567,30 @@ const createSale = async (req, res) => {
       htmlLength: fullHtml.length,
     });
 
+    // Log formatted creation time
+    const formattedCreationTime = formatToSriLankaTime(newSale.date);
+    console.log("✅ Sale Created Successfully:", {
+      invoiceNumber: newSale.invoiceNumber,
+      createdAt: formattedCreationTime.full,
+      createdAtISO: formattedCreationTime.iso,
+      customer: newSale.customer,
+      grandTotal: newSale.grandTotal,
+      timezone: "Sri Lanka Time (UTC+05:30)"
+    });
+
     res.status(201).json({
       message: "Sale created successfully!",
       html: fullHtml,
       status: "success",
-      sale: newSale,
+      sale: {
+        ...newSale.toObject(),
+        formattedDate: {
+          full: formattedCreationTime.full,
+          dateOnly: formattedCreationTime.dateOnly,
+          timeOnly: formattedCreationTime.timeOnly,
+          iso: formattedCreationTime.iso
+        }
+      },
     });
   } catch (error) {
     console.error("Error saving sale:", error);
@@ -580,6 +603,7 @@ const createSale = async (req, res) => {
 };
 
 const createNonPosSale = async (req, res) => {
+  const date = new Date();
   try {
     const saleData = req.body;
 
@@ -624,8 +648,8 @@ const createNonPosSale = async (req, res) => {
         .json({ message: "Reference ID is required.", status: "unsuccess" });
     }
     
-    // Set server-side UTC time for nonPos sales (same as POS sales)
-    saleData.date = new Date();
+    // Always use server UTC time, ignore any frontend date
+    saleData.date = date;
     
     if (!saleData.productsData || saleData.productsData.length === 0) {
       return res
@@ -813,7 +837,7 @@ try {
           saleId: newSale._id,
           amountToPay: newSale.grandTotal,
           payingAmount: payment.amount,
-          currentDate: newSale.date || new Date(),
+          currentDate: newSale.date || date,
           paymentType: payment.type,
         }));
         await SalePayment.insertMany(paymentsToInsert);
@@ -829,12 +853,11 @@ try {
       ? `${baseUrl}/${settings.logo.replace(/\\/g, "/")}`
       : null;
 
-    // Date formatting helper
+    // Date formatting helper using timeZone utility
     const formatDate = (date) => {
       if (!date) return "";
-      // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
-      const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
-      return sriLankanTime.format("MMM DD, YYYY HH:mm");
+      const sriLankanTime = formatToSriLankaTime(date);
+      return sriLankanTime ? sriLankanTime.full : "";
     };
 
     const totalSavedAmount = saleData.productsData.reduce((sum, product) => {
@@ -957,11 +980,30 @@ try {
         "Not found",
     });
 
+    // Log formatted creation time for Non-POS sale
+    const formattedCreationTime = formatToSriLankaTime(newSale.date);
+    console.log("✅ Non-POS Sale Created Successfully:", {
+      invoiceNumber: newSale.invoiceNumber,
+      createdAt: formattedCreationTime.full,
+      createdAtISO: formattedCreationTime.iso,
+      customer: newSale.customer,
+      grandTotal: newSale.grandTotal,
+      timezone: "Sri Lanka Time (UTC+05:30)"
+    });
+
     res.status(201).json({
       message: "Non-POS Sale created successfully!",
       html: fullHtml,
       status: "success",
-      sale: newSale,
+      sale: {
+        ...newSale.toObject(),
+        formattedDate: {
+          full: formattedCreationTime.full,
+          dateOnly: formattedCreationTime.dateOnly,
+          timeOnly: formattedCreationTime.timeOnly,
+          iso: formattedCreationTime.iso
+        }
+      },
     });
   } catch (error) {
     console.error("Error saving Non-POS sale:", error);
@@ -1024,12 +1066,12 @@ const payingForSale = async (req, res) => {
         .json({ message: "Payment exceeds the amount to pay." });
     }
 
-    // Create a new payment entry
+    // Create a new payment entry with server UTC time
     const newPayment = new SalePayment({
       saleId,
       amountToPay: numericAmountToPay,
       payingAmount: numericPayingAmount,
-      currentDate: currentDate || Date.now(),
+      currentDate: new Date(), // Always use server UTC time
       paymentType: paymentType || "Default",
     });
 
@@ -1263,11 +1305,29 @@ const findSaleById = async (req, res) => {
       return productData;
     });
 
+    // Format the sale date for display
+    const formattedSaleDate = formatToSriLankaTime(sale.date);
+    
     const saleWithUpdatedProducts = {
       ...sale,
       productsData: updatedProductsData,
+      formattedDate: {
+        full: formattedSaleDate.full,
+        dateOnly: formattedSaleDate.dateOnly,
+        timeOnly: formattedSaleDate.timeOnly,
+        iso: formattedSaleDate.iso
+      }
     };
 
+    console.log("🔍 Sale Fetched Successfully:", {
+      invoiceNumber: sale.invoiceNumber,
+      saleDate: formattedSaleDate.full,
+      saleISO: formattedSaleDate.iso,
+      customer: sale.customer,
+      grandTotal: sale.grandTotal,
+      timezone: "Sri Lanka Time (UTC+05:30)"
+    });
+    
     console.log(
       "🚀 Final Sale Data Sent to Frontend:",
       JSON.stringify(saleWithUpdatedProducts, null, 2)
@@ -1295,8 +1355,8 @@ const updateSale = async (req, res) => {
       JSON.stringify(updateData, null, 2)
     );
 
+    // Note: Date validation removed - backend preserves original date automatically
     if (
-      !updateData.date ||
       !updateData.paymentStatus ||
       !updateData.orderStatus ||
       !updateData.paymentType
@@ -1572,7 +1632,7 @@ try {
           saleId,
           amountToPay: updatedSale.grandTotal,
           payingAmount: paymentType.amount,
-          currentDate: updateData.date || Date.now(),
+          currentDate: new Date(), // Always use server UTC time
           paymentType: paymentType.type,
         });
         await newPayment.save();
@@ -1722,7 +1782,22 @@ const fetchSales = async (req, res) => {
           .json({ message: "No sales found matching the provided keyword." });
       }
 
-      return res.status(200).json(sales);
+      // Add formatted dates to sales
+      const salesWithFormattedDates = sales.map(sale => {
+        const formattedTime = formatToSriLankaTime(sale.date);
+        return {
+          ...sale.toObject(),
+          formattedDate: {
+            full: formattedTime.full,
+            dateOnly: formattedTime.dateOnly,
+            timeOnly: formattedTime.timeOnly,
+            iso: formattedTime.iso
+          }
+        };
+      });
+      
+      console.log(`🔍 Fetched ${sales.length} sales by keyword '${keyword}' with formatted times`);
+      return res.status(200).json(salesWithFormattedDates);
     }
     if (req.query.page) {
       const size = parseInt(req.query.page.size) || 10; // Default size is 10
@@ -1736,8 +1811,24 @@ const fetchSales = async (req, res) => {
         .limit(size);
 
       const totalSales = await Sale.countDocuments(); // Total sales count
+      
+      // Add formatted dates to paginated sales
+      const salesWithFormattedDates = sales.map(sale => {
+        const formattedTime = formatToSriLankaTime(sale.date);
+        return {
+          ...sale.toObject(),
+          formattedDate: {
+            full: formattedTime.full,
+            dateOnly: formattedTime.dateOnly,
+            timeOnly: formattedTime.timeOnly,
+            iso: formattedTime.iso
+          }
+        };
+      });
+      
+      console.log(`🔍 Fetched ${sales.length} sales (page ${number}/${Math.ceil(totalSales / size)}) with formatted times`);
       return res.status(200).json({
-        sales,
+        sales: salesWithFormattedDates,
         total: totalSales,
         size,
         number,
@@ -1749,7 +1840,22 @@ const fetchSales = async (req, res) => {
         return res.status(404).json({ message: "No sales found." });
       }
 
-      return res.status(200).json(sales);
+      // Add formatted dates to all sales
+      const salesWithFormattedDates = sales.map(sale => {
+        const formattedTime = formatToSriLankaTime(sale.date);
+        return {
+          ...sale.toObject(),
+          formattedDate: {
+            full: formattedTime.full,
+            dateOnly: formattedTime.dateOnly,
+            timeOnly: formattedTime.timeOnly,
+            iso: formattedTime.iso
+          }
+        };
+      });
+      
+      console.log(`🔍 Fetched all ${sales.length} sales with formatted times`);
+      return res.status(200).json(salesWithFormattedDates);
     }
   } catch (error) {
     console.error("Error fetching sales:", error);

@@ -16,6 +16,7 @@ const SaleReturn = require('../../models/saleReturnModel')
 const posController = require('../posController/posController')
 const mongoose = require('mongoose');
 const generateReferenceId = require('../../utils/generateReferenceID');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 // Return a sale
 const returnSale = async (req, res) => {
@@ -36,6 +37,8 @@ const returnSale = async (req, res) => {
         }
         const refferenceId = await generateReferenceId('SALE_RETURN');
         returnData.refferenceId = refferenceId;
+        // Always use server UTC time, ignore any frontend date
+        returnData.date = new Date();
 
         returnData.productsData = returnData.productsData.map(product => ({
             ...product,
@@ -107,9 +110,29 @@ const returnSale = async (req, res) => {
         await Promise.all(updatePromises);
         const newSaleReturn = new SaleReturn(returnData);
         const savedReturn = await newSaleReturn.save();
+        
+        // Log formatted creation time for sale return
+        const formattedReturnTime = formatToSriLankaTime(savedReturn.date);
+        console.log("✅ Sale Return Created Successfully:", {
+            referenceId: savedReturn.refferenceId,
+            createdAt: formattedReturnTime.full,
+            createdAtISO: formattedReturnTime.iso,
+            customer: savedReturn.customer,
+            returnAmount: savedReturn.returnAmount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+        
         res.status(201).json({
             message: 'Sale return saved successfully',
-            saleReturn: savedReturn
+            saleReturn: {
+                ...savedReturn.toObject(),
+                formattedDate: {
+                    full: formattedReturnTime.full,
+                    dateOnly: formattedReturnTime.dateOnly,
+                    timeOnly: formattedReturnTime.timeOnly,
+                    iso: formattedReturnTime.iso
+                }
+            }
         });
     } catch (error) {
         console.error('Error saving sale return:', error);
@@ -218,10 +241,19 @@ const findSaleReturnById = async (req, res) => {
             };
         });
 
+        // Format the sale return date for display
+        const formattedReturnDate = formatToSriLankaTime(saleReturn.date);
+        
         // Combine sale return with the updated product data
         const saleReturnWithUpdatedProducts = {
             _id: saleReturn._id,
             date: saleReturn.date,
+            formattedDate: {
+                full: formattedReturnDate.full,
+                dateOnly: formattedReturnDate.dateOnly,
+                timeOnly: formattedReturnDate.timeOnly,
+                iso: formattedReturnDate.iso
+            },
             customer: saleReturn.customer,
             customerName: saleReturn.customerName || "Unknown",
             warehouse: saleReturn.warehouse,
@@ -230,6 +262,15 @@ const findSaleReturnById = async (req, res) => {
             returnAmount: saleReturn.returnAmount,
             productsData: updatedProductsData // Attach updated products data
         };
+
+        console.log("🔍 Sale Return Fetched Successfully:", {
+            referenceId: saleReturn.refferenceId,
+            returnDate: formattedReturnDate.full,
+            returnISO: formattedReturnDate.iso,
+            customer: saleReturn.customer,
+            returnAmount: saleReturn.returnAmount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
 
         // Send the updated sale return object as response
         res.status(200).json(saleReturnWithUpdatedProducts);
@@ -366,9 +407,16 @@ const fetchSaleReturns = async (req, res) => {
                 };
             });
 
+            const formattedTime = formatToSriLankaTime(saleReturn.date);
             const saleReturnWithUpdatedProducts = {
                 ...saleReturn.toObject(),
-                productsData: updatedProductsData
+                productsData: updatedProductsData,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
             };
 
             return res.status(200).json(saleReturnWithUpdatedProducts);
@@ -391,7 +439,21 @@ const fetchSaleReturns = async (req, res) => {
                 return res.status(404).json({ message: 'No sale returns found matching the provided keyword.' });
             }
 
-            return res.status(200).json(saleReturns);
+            // Add formatted dates to sale returns
+            const returnsWithFormattedDates = saleReturns.map(saleReturn => {
+                const formattedTime = formatToSriLankaTime(saleReturn.date);
+                return {
+                    ...saleReturn.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            return res.status(200).json(returnsWithFormattedDates);
         }
         const size = parseInt(req.query?.page?.size) || 10; // Default size is 10
         const number = parseInt(req.query?.page?.number) || 1; // Default page number is 1
@@ -410,9 +472,23 @@ const fetchSaleReturns = async (req, res) => {
             const total = await SaleReturn.countDocuments();
             const totalPages = Math.ceil(total / size);
 
+            // Add formatted dates to paginated sale returns
+            const returnsWithFormattedDates = saleReturns.map(saleReturn => {
+                const formattedTime = formatToSriLankaTime(saleReturn.date);
+                return {
+                    ...saleReturn.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
             return res.status(200).json({
                 message: 'Sale returns fetched successfully with pagination',
-                data: saleReturns,
+                data: returnsWithFormattedDates,
                 total,
                 totalPages,
                 currentPage: number,
@@ -426,9 +502,23 @@ const fetchSaleReturns = async (req, res) => {
             return res.status(404).json({ message: 'No sale returns found.' });
         }
 
+        // Add formatted dates to all sale returns
+        const returnsWithFormattedDates = saleReturns.map(saleReturn => {
+            const formattedTime = formatToSriLankaTime(saleReturn.date);
+            return {
+                ...saleReturn.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
         res.status(200).json({
             message: 'Sale returns fetched successfully',
-            saleReturns
+            saleReturns: returnsWithFormattedDates
         });
 
     } catch (error) {
@@ -472,6 +562,7 @@ const searchSaleReturns = async (req, res) => {
         // Format sale returns data if additional processing is needed
         const formattedSaleReturns = saleReturns.map((saleReturn) => {
             const saleReturnObj = saleReturn.toObject();
+            const formattedTime = formatToSriLankaTime(saleReturnObj.date);
 
             return {
                 _id: saleReturnObj._id,
@@ -487,9 +578,15 @@ const searchSaleReturns = async (req, res) => {
                 adjustedTax : saleReturnObj.adjustedTax,
                 adjustedDiscount : saleReturnObj.adjustedDiscount,
                 date: saleReturnObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 productsData: saleReturnObj.productsData, // Include product details
                 createdAt: saleReturnObj.createdAt
-                    ? saleReturnObj.createdAt.toISOString().slice(0, 10)
+                    ? formatToSriLankaTime(saleReturnObj.createdAt).dateOnly
                     : null,
             };
         });
@@ -516,7 +613,7 @@ const getTotalReturnAmount = async (req, res) => {
                 .filter(product => !product.restocking) // Only consider products where restocking is false
                 .reduce((sum, product) => sum + (product.price * product.returnQty), 0); // Calculate total return amount
             return {
-                date: sale.date,
+                date: formatToSriLankaTime(sale.date).full,
                 returnAmount: returnAmount
             };
         });
@@ -532,11 +629,23 @@ const getTotalReturnAmount = async (req, res) => {
 
 const getTodayReturnAmount = async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // Get current UTC date and start/end of day in Sri Lankan timezone
+        const now = new Date();
+        const sriLankanTime = formatToSriLankaTime(now);
+        const todayInSriLanka = sriLankanTime.dateOnly; // Format: DD/MM/YYYY
+        
+        // Convert to proper date format for comparison (YYYY-MM-DD)
+        const [day, month, year] = todayInSriLanka.split('/');
+        const todayISO = `${year}-${month}-${day}`;
+        
+        // Create UTC date range for the entire Sri Lankan day
+        const startOfDayUTC = new Date(`${todayISO}T00:00:00+05:30`);
+        const endOfDayUTC = new Date(`${todayISO}T23:59:59+05:30`);
+        
         const saleReturns = await SaleReturn.find({
             date: {
-                $gte: new Date(`${today}T00:00:00.000Z`),
-                $lte: new Date(`${today}T23:59:59.999Z`)
+                $gte: startOfDayUTC,
+                $lte: endOfDayUTC
             }
         });
 
@@ -545,7 +654,7 @@ const getTodayReturnAmount = async (req, res) => {
                 .filter(product => !product.restocking)
                 .reduce((sum, product) => sum + (product.price * product.returnQty), 0);
             return {
-                date: sale.date,
+                date: formatToSriLankaTime(sale.date).full,
                 returnAmount: returnAmount
             };
         });
@@ -563,8 +672,7 @@ const getTodayReturnAmount = async (req, res) => {
 const getLastWeekReturnAmount = async (req, res) => {
     try {
         const today = new Date();
-        const lastWeek = new Date(today);
-        lastWeek.setDate(today.getDate() - 7);
+        const lastWeek = new Date(today.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 days ago
 
         const saleReturns = await SaleReturn.find({
             date: {
@@ -586,7 +694,7 @@ const getLastWeekReturnAmount = async (req, res) => {
             }));
 
             return {
-                date: sale.date,
+                date: formatToSriLankaTime(sale.date).full,
                 returnAmount: returnAmount,
                 products: products
             };
@@ -620,7 +728,7 @@ const getLastMonthReturnAmount = async (req, res) => {
                 .filter(product => !product.restocking)
                 .reduce((sum, product) => sum + (product.price * product.returnQty), 0);
             return {
-                date: sale.date,
+                date: formatToSriLankaTime(sale.date).full,
                 returnAmount: returnAmount
             };
         });
@@ -652,7 +760,7 @@ const getLastYearReturnAmount = async (req, res) => {
                 .filter(product => !product.restocking)
                 .reduce((sum, product) => sum + (product.price * product.returnQty), 0);
             return {
-                date: sale.date,
+                date: formatToSriLankaTime(sale.date).full,
                 returnAmount: returnAmount
             };
         });

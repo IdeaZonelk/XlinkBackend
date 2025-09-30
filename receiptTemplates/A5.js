@@ -1,5 +1,6 @@
 const Handlebars = require("handlebars");
 const moment = require("moment-timezone");
+const { formatToSriLankaTime } = require("../utils/timeZone");
 
 Handlebars.registerHelper("formatCurrency", function (number) {
   if (isNaN(number)) return "0.00";
@@ -129,9 +130,9 @@ Handlebars.registerHelper("multiply", function (a, b) {
 
 const formatDate = (date) => {
   if (!date) return "";
-  // Convert UTC time to Sri Lankan time (Asia/Colombo timezone)
-  const sriLankanTime = moment.utc(date).tz("Asia/Colombo");
-  return sriLankanTime.format("MMM DD, YYYY HH:mm");
+  // Convert UTC time to Sri Lankan time using timeZone utility
+  const sriLankanTime = formatToSriLankaTime(date);
+  return sriLankanTime ? sriLankanTime.full : "";
 };
 
 const template = Handlebars.compile(`
@@ -512,15 +513,8 @@ const template = Handlebars.compile(`
 
 module.exports = {
   generateReceiptA5: (data) => {
-    // Format the date before passing to template
-    const formattedData = {
-      ...data,
-      newSale: {
-        ...data.newSale,
-        date: formatDate(new Date()),
-      },
-    };
-    return template(formattedData);
+    // Use the backend-formatted date from sale data
+    return template(data);
   },
   getBarcodeScriptA5: () => {
     return `

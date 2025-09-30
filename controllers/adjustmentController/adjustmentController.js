@@ -13,6 +13,7 @@ const Adjustment = require('../../models/adjustmentModel')
 const Product = require('../../models/products/product');
 const mongoose = require('mongoose');
 const generateReferenceId = require('../../utils/generateReferenceID');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 // CREATE ADJUSTMENT
 const createAdjustment = async (req, res) => {
@@ -22,6 +23,9 @@ const createAdjustment = async (req, res) => {
         // Generate a reference ID for the adjustment
         const referenceId = await generateReferenceId('ADJ');
         adjustmentData.refferenceId = referenceId;
+        
+        // Always use server UTC time, ignore any frontend date
+        adjustmentData.date = new Date();
 
         const newAdjustment = new Adjustment(adjustmentData);
         const productsData = adjustmentData.productsData;
@@ -33,9 +37,7 @@ const createAdjustment = async (req, res) => {
         if (!adjustmentData.refferenceId) {
             return res.status(400).json({ message: 'Reference ID is required.', status: 'unsuccess' });
         }
-        if (!adjustmentData.date) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        // Note: Date validation removed since we automatically set server time
         if (!Array.isArray(productsData) || productsData.length === 0) {
             return res.status(400).json({ message: 'No products provided for adjustment.', status: 'unsuccess' });
         }
@@ -123,8 +125,29 @@ const createAdjustment = async (req, res) => {
         await Promise.all(updatePromises);
         await newAdjustment.save();  
 
+        // Log formatted creation time for adjustment
+        const formattedAdjustmentTime = formatToSriLankaTime(newAdjustment.date);
+        console.log("✅ Adjustment Created Successfully:", {
+            referenceId: newAdjustment.refferenceId,
+            createdAt: formattedAdjustmentTime.full,
+            createdAtISO: formattedAdjustmentTime.iso,
+            warehouse: newAdjustment.warehouse,
+            productsCount: newAdjustment.productsData.length,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
 
-        res.status(201).json({ message: 'Adjustment saved successfully!', adjustment: newAdjustment });
+        res.status(201).json({ 
+            message: 'Adjustment saved successfully!', 
+            adjustment: {
+                ...newAdjustment.toObject(),
+                formattedDate: {
+                    full: formattedAdjustmentTime.full,
+                    dateOnly: formattedAdjustmentTime.dateOnly,
+                    timeOnly: formattedAdjustmentTime.timeOnly,
+                    iso: formattedAdjustmentTime.iso
+                }
+            }
+        });
     } catch (error) {
         console.error('Error saving adjustment:', error);
         res.status(500).json({ message: 'Error saving adjustment', error: error.message });
@@ -221,10 +244,19 @@ const findAdjustmentByIdForUpdate = async (req, res) => {
             return productData;
         });
 
+        // Format the adjustment date for display
+        const formattedAdjustmentDate = formatToSriLankaTime(sale.date);
+        
         // Combine sale with the updated product details
         const saleWithUpdatedProducts = {
             ...sale.toObject(), // Spread existing sale fields
-            productsData: updatedProductsData // Attach updated products data
+            productsData: updatedProductsData, // Attach updated products data
+            formattedDate: {
+                full: formattedAdjustmentDate.full,
+                dateOnly: formattedAdjustmentDate.dateOnly,
+                timeOnly: formattedAdjustmentDate.timeOnly,
+                iso: formattedAdjustmentDate.iso
+            }
         };
 
         // Send the updated sale data
@@ -444,8 +476,22 @@ const fetchAdjustments = async (req, res) => {
                 const total = await Adjustment.countDocuments();
                 const totalPages = Math.ceil(total / size);
 
+                // Add formatted dates to paginated adjustments
+                const adjustmentsWithFormattedDates = adjustments.map(adjustment => {
+                    const formattedTime = formatToSriLankaTime(adjustment.date);
+                    return {
+                        ...adjustment.toObject(),
+                        formattedDate: {
+                            full: formattedTime.full,
+                            dateOnly: formattedTime.dateOnly,
+                            timeOnly: formattedTime.timeOnly,
+                            iso: formattedTime.iso
+                        }
+                    };
+                });
+
                 return res.status(200).json({
-                    data: adjustments,
+                    data: adjustmentsWithFormattedDates,
                     total,
                     totalPages,
                     currentPage: number,
@@ -458,7 +504,22 @@ const fetchAdjustments = async (req, res) => {
             if (!adjustments || adjustments.length === 0) {
                 return res.status(404).json({ message: 'No adjustments found' });
             }
-            return res.status(200).json(adjustments);
+            
+            // Add formatted dates to all adjustments
+            const adjustmentsWithFormattedDates = adjustments.map(adjustment => {
+                const formattedTime = formatToSriLankaTime(adjustment.date);
+                return {
+                    ...adjustment.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            return res.status(200).json(adjustmentsWithFormattedDates);
         }
 
         // Fetch adjustments by reference ID
@@ -474,7 +535,22 @@ const fetchAdjustments = async (req, res) => {
             if (!adjustments || adjustments.length === 0) {
                 return res.status(404).json({ message: 'No adjustments found for this reference ID.' });
             }
-            return res.status(200).json(adjustments);
+            
+            // Add formatted dates to reference ID search results
+            const adjustmentsWithFormattedDates = adjustments.map(adjustment => {
+                const formattedTime = formatToSriLankaTime(adjustment.date);
+                return {
+                    ...adjustment.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            return res.status(200).json(adjustmentsWithFormattedDates);
         }
 
         // Fetch adjustment by ID for update
@@ -520,10 +596,19 @@ const fetchAdjustments = async (req, res) => {
                 return productData;
             });
 
+            // Format the adjustment date for display
+            const formattedAdjustmentDate = formatToSriLankaTime(adjustment.date);
+            
             // Combine adjustment with updated product details
             const adjustmentWithUpdatedProducts = {
                 ...adjustment.toObject(),
                 productsData: updatedProductsData,
+                formattedDate: {
+                    full: formattedAdjustmentDate.full,
+                    dateOnly: formattedAdjustmentDate.dateOnly,
+                    timeOnly: formattedAdjustmentDate.timeOnly,
+                    iso: formattedAdjustmentDate.iso
+                }
             };
 
             return res.status(200).json(adjustmentWithUpdatedProducts);
@@ -572,6 +657,7 @@ const searchAdjustment = async (req, res) => {
         // Format adjustment data if additional processing is needed
         const formattedAdjustments = adjustments.map((adjustment) => {
             const adjustmentObj = adjustment.toObject();
+            const formattedTime = formatToSriLankaTime(adjustmentObj.date);
 
             return {
                 _id: adjustmentObj._id,
@@ -582,6 +668,12 @@ const searchAdjustment = async (req, res) => {
                 productsData: adjustmentObj.productsData, // Include product details
                 status: adjustmentObj.status, // Example field, adjust based on your schema
                 date: adjustmentObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 discount: adjustmentObj.discount,
                 discountType: adjustmentObj.discountType,
                 grandTotal: adjustmentObj.grandTotal,
@@ -592,7 +684,7 @@ const searchAdjustment = async (req, res) => {
                 shipping: adjustmentObj.shipping,
                 tax: adjustmentObj.tax,
                 createdAt: adjustmentObj.createdAt
-                    ? adjustmentObj.createdAt.toISOString().slice(0, 10)
+                    ? formatToSriLankaTime(adjustmentObj.createdAt).dateOnly
                     : null,
             };
         });
