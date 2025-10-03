@@ -13,23 +13,23 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Expenses = require('../../models/expensesModel')
 const generateReferenceId = require('../../utils/generateReferenceID');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 const createExpenses = async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
-    const { warehouse, category, amount, date, title, details, refferenceId } = req.body;
+    const { warehouse, category, amount, title, details } = req.body; // Remove date from destructuring
 
      // Generate a reference ID for the sale
      const referenceId = await generateReferenceId('EXPENSE');
 
-    // Collect missing fields
+    // Collect missing fields (remove date validation)
     const missingFields = [];
     if (!warehouse) missingFields.push('warehouse');
     if (!category) missingFields.push('category');
     if (!amount) missingFields.push('amount');
-    if (!date) missingFields.push('date');
     if (!title) missingFields.push('title');
-    // if (!refferenceId) missingFields.push('refferenceId');
+    // Note: Date is no longer required from frontend
 
     if (missingFields.length > 0) {
         return res.status(400).json({
@@ -51,22 +51,42 @@ const createExpenses = async (req, res) => {
         }
 
         // Create and save the expense
+        const expenseDate = new Date(); // Get server UTC time
         const newExpenses = new Expenses({
             refferenceId: referenceId, 
             warehouse,
             category,
             amount,
-            date,
+            date: expenseDate, // Use server UTC time
             title,
             details,
         });
         await newExpenses.save();
         await session.commitTransaction();
 
+        // Log formatted creation time for expense
+        const formattedExpenseTime = formatToSriLankaTime(newExpenses.date);
+        console.log("✅ Expense Created Successfully:", {
+            referenceId: newExpenses.refferenceId,
+            createdAt: formattedExpenseTime.full,
+            createdAtISO: formattedExpenseTime.iso,
+            category: newExpenses.category,
+            amount: newExpenses.amount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
         res.status(201).json({
             message: 'Expense created successfully',
             status: 'success',
-            data: newExpenses,
+            data: {
+                ...newExpenses.toObject(),
+                formattedDate: {
+                    full: formattedExpenseTime.full,
+                    dateOnly: formattedExpenseTime.dateOnly,
+                    timeOnly: formattedExpenseTime.timeOnly,
+                    iso: formattedExpenseTime.iso
+                }
+            },
         });
     } catch (error) {
         console.error('Error in createExpenses:', error);
@@ -77,11 +97,25 @@ const createExpenses = async (req, res) => {
         });
     }
 };
-// Controller to get all currency data
 const getAllExpenses = async (req, res) => {
     try {
-        const expenses = await Expenses.find(); // Fetch all currency documents
-        res.status(200).json({ data: expenses });
+        const expenses = await Expenses.find(); // Fetch all expenses documents
+        
+        // Add formatted dates to expenses
+        const expensesWithFormattedDates = expenses.map(expense => {
+            const formattedTime = formatToSriLankaTime(expense.date);
+            return {
+                ...expense.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        res.status(200).json({ data: expensesWithFormattedDates });
     } catch (error) {
         res.status(500).json({ message: 'Failed to retrieve expenses,Please try again', error: error.message });
     }
@@ -103,7 +137,6 @@ const deleteCExpenses = async (req, res) => {
 };
 
 
-//Find currency by name
 const getExpensesByCategory = async (req, res) => {
     const { category } = req.query;
     try {
@@ -113,13 +146,27 @@ const getExpensesByCategory = async (req, res) => {
         if (expenses.length === 0) {
             return res.status(404).json({ message: 'No expenses found' });
         }
-        res.status(200).json({ data: expenses });
+        
+        // Add formatted dates to expenses
+        const expensesWithFormattedDates = expenses.map(expense => {
+            const formattedTime = formatToSriLankaTime(expense.date);
+            return {
+                ...expense.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        res.status(200).json({ data: expensesWithFormattedDates });
     } catch (error) {
         res.status(500).json({ message: 'Failed to search expenses,Try again', error: error.message });
     }
 };
 
-//Get currncy by id
 const findExpensesById = async (req, res) => {
     const { id } = req.params;
     try {
@@ -127,7 +174,21 @@ const findExpensesById = async (req, res) => {
         if (!expenses) {
             return res.status(404).json({ message: 'expenses not found' });
         }
-        res.status(200).json({ data: expenses });
+        
+        // Format the expense date for display
+        const formattedExpenseDate = formatToSriLankaTime(expenses.date);
+        
+        const expenseWithFormattedDate = {
+            ...expenses.toObject(),
+            formattedDate: {
+                full: formattedExpenseDate.full,
+                dateOnly: formattedExpenseDate.dateOnly,
+                timeOnly: formattedExpenseDate.timeOnly,
+                iso: formattedExpenseDate.iso
+            }
+        };
+        
+        res.status(200).json({ data: expenseWithFormattedDate });
     } catch (error) {
         res.status(500).json({ message: 'Failed to retrieve expenses,Try again', error: error.message });
     }
@@ -135,15 +196,15 @@ const findExpensesById = async (req, res) => {
 
 const updateExpenses = async (req, res) => {
     const { id } = req.params;
-    const { warehouse, category, amount, date, title, details } = req.body;
+    const { warehouse, category, amount, title, details } = req.body; // Remove date from destructuring
 
-    // Collect missing fields
+    // Collect missing fields (remove date validation)
     const missingFields = [];
     if (!warehouse) missingFields.push('warehouse');
     if (!category) missingFields.push('category');
     if (!amount) missingFields.push('amount');
-    if (!date) missingFields.push('date');
     if (!title) missingFields.push('title');
+    // Note: Date is no longer required from frontend
 
     if (missingFields.length > 0) {
         return res.status(400).json({
@@ -154,10 +215,11 @@ const updateExpenses = async (req, res) => {
     }
 
     try {
-        // Update expense
+        // Update expense (preserve original date unless explicitly updating)
         const updatedExpenses = await Expenses.findByIdAndUpdate(
             id,
-            { warehouse, category, amount, date, title, details }
+            { warehouse, category, amount, title, details }, // Remove date from update to preserve original
+            { new: true } // Return updated document
         );
 
         if (!updatedExpenses) {
@@ -167,10 +229,29 @@ const updateExpenses = async (req, res) => {
             });
         }
 
+        // Log formatted update time for expense
+        const formattedUpdateTime = formatToSriLankaTime(updatedExpenses.date);
+        console.log("✅ Expense Updated Successfully:", {
+            referenceId: updatedExpenses.refferenceId,
+            updatedAt: formattedUpdateTime.full,
+            updatedAtISO: formattedUpdateTime.iso,
+            category: updatedExpenses.category,
+            amount: updatedExpenses.amount,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
         res.status(200).json({
             message: 'Expense updated successfully',
             status: 'success',
-            data: updatedExpenses,
+            data: {
+                ...updatedExpenses.toObject(),
+                formattedDate: {
+                    full: formattedUpdateTime.full,
+                    dateOnly: formattedUpdateTime.dateOnly,
+                    timeOnly: formattedUpdateTime.timeOnly,
+                    iso: formattedUpdateTime.iso
+                }
+            },
         });
     } catch (error) {
         console.error('Error in updateExpenses:', error);
@@ -223,10 +304,24 @@ const getExpenses = async (req, res) => {
                 }
 
                 const total = await Expenses.countDocuments();
-            const totalPages = Math.ceil(total / size);
+                const totalPages = Math.ceil(total / size);
+
+                // Add formatted dates to paginated expenses
+                const expensesWithFormattedDates = expenses.map(expense => {
+                    const formattedTime = formatToSriLankaTime(expense.date);
+                    return {
+                        ...expense.toObject(),
+                        formattedDate: {
+                            full: formattedTime.full,
+                            dateOnly: formattedTime.dateOnly,
+                            timeOnly: formattedTime.timeOnly,
+                            iso: formattedTime.iso
+                        }
+                    };
+                });
 
                 return res.status(200).json({
-                    data: expenses,
+                    data: expensesWithFormattedDates,
                     total,
                     totalPages,
                     currentPage: number,
@@ -239,9 +334,39 @@ const getExpenses = async (req, res) => {
             if (expenses.length === 0) {
                 return res.status(404).json({ message: 'No expenses found' });
             }
+            
+            // Add formatted dates to all expenses
+            const expensesWithFormattedDates = expenses.map(expense => {
+                const formattedTime = formatToSriLankaTime(expense.date);
+                return {
+                    ...expense.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            res.status(200).json({ data: expensesWithFormattedDates });
         }
 
-        res.status(200).json({ data: expenses });
+        // Add formatted dates to single expense or keyword search results
+        const expensesWithFormattedDates = expenses.map(expense => {
+            const formattedTime = formatToSriLankaTime(expense.date);
+            return {
+                ...expense.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        res.status(200).json({ data: expensesWithFormattedDates });
     } catch (error) {
         console.error('Error retrieving expenses:', error);
         res.status(500).json({ message: 'Failed to retrieve expenses, try again', error: error.message });
@@ -283,6 +408,7 @@ const searchExpense = async (req, res) => {
         // Format the fetched expenses if additional processing is needed
         const formattedExpenses = expenses.map((expense) => {
             const expenseObj = expense.toObject();
+            const formattedTime = formatToSriLankaTime(expenseObj.date);
             
             return {
                 _id: expenseObj._id,
@@ -290,12 +416,18 @@ const searchExpense = async (req, res) => {
                 refferenceId: expenseObj.refferenceId,
                 amount: expenseObj.amount,
                 date: expenseObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 title: expenseObj.title,
                 warehouse: expenseObj.warehouse,
                 description: expenseObj.description,
                 details: expenseObj.details,
                 createdAt: expenseObj.createdAt 
-                    ? expenseObj.createdAt.toISOString().slice(0, 10) 
+                    ? formatToSriLankaTime(expenseObj.createdAt).dateOnly
                     : null,
             };
         });

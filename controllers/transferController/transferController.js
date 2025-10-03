@@ -13,6 +13,7 @@ const Transfer = require('../../models/transferModel')
 const Product = require('../../models/products/product');
 const generateReferenceId = require('../../utils/generateReferenceID')
 const mongoose = require('mongoose');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 const createTransfer = async (req, res) => {
     try {
@@ -25,6 +26,7 @@ const createTransfer = async (req, res) => {
         const newTransfer = new Transfer({
             ...transferData,
             refferenceId: referenceId,
+            date: new Date(), // Always use server UTC time
         });
 
         const updatePromises = productsData.map(async (product) => {
@@ -116,7 +118,30 @@ const createTransfer = async (req, res) => {
         // Save the transfer record
         await newTransfer.save();
 
-        res.status(201).json({ message: 'Transfer saved successfully!', transfer: newTransfer });
+        // Log formatted creation time for transfer
+        const formattedTransferTime = formatToSriLankaTime(newTransfer.date);
+        console.log("✅ Transfer Created Successfully:", {
+            referenceId: newTransfer.refferenceId,
+            createdAt: formattedTransferTime.full,
+            createdAtISO: formattedTransferTime.iso,
+            warehouseFrom: newTransfer.warehouseFrom,
+            warehouseTo: newTransfer.warehouseTo,
+            grandTotal: newTransfer.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
+        res.status(201).json({ 
+            message: 'Transfer saved successfully!', 
+            transfer: {
+                ...newTransfer.toObject(),
+                formattedDate: {
+                    full: formattedTransferTime.full,
+                    dateOnly: formattedTransferTime.dateOnly,
+                    timeOnly: formattedTransferTime.timeOnly,
+                    iso: formattedTransferTime.iso
+                }
+            }
+        });
 
     } catch (error) {
         console.error('Error saving Transfer:', error);
@@ -213,8 +238,23 @@ const createTransfer = async (req, res) => {
 //VIEW TRAnSFER
 const getTransfer = async (req, res) => {
     try {
-        const transfer = await Transfer.find(); // Fetch all adjustment from the database
-        res.status(200).json(transfer); // Send the transfer data back to the client
+        const transfers = await Transfer.find(); // Fetch all transfers from the database
+        
+        // Add formatted dates to transfers
+        const transfersWithFormattedDates = transfers.map(transfer => {
+            const formattedTime = formatToSriLankaTime(transfer.date);
+            return {
+                ...transfer.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        res.status(200).json(transfersWithFormattedDates); // Send the transfer data back to the client
     } catch (error) {
         console.error('Error fetching transfer:', error);
         res.status(500).json({ message: 'Error fetching transfer', error });
@@ -250,7 +290,22 @@ const findTransferById = async (req, res) => {
         if (transfer.length === 0) {
             return res.status(404).json({ message: 'No transfer found for this id' });
         }
-        res.status(200).json(transfer); // Send found transfer back to the client
+        
+        // Add formatted dates to transfers
+        const transfersWithFormattedDates = transfer.map(t => {
+            const formattedTime = formatToSriLankaTime(t.date);
+            return {
+                ...t.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        res.status(200).json(transfersWithFormattedDates); // Send found transfer back to the client
     } catch (error) {
         console.error('Error fetching transfer by id:', error);
         res.status(500).json({ message: 'Error fetching transfer by id', error });
@@ -328,13 +383,32 @@ const findTransferByIdForUpdate = async (req, res) => {
             });
 
 
-        // Combine sale with the updated product details
+        // Format the transfer date for display
+        const formattedTransferDate = formatToSriLankaTime(transfer.date);
+        
+        // Combine transfer with the updated product details
         const transferWithUpdatedProducts = {
-            ...transfer.toObject(), // Spread existing sale fields
-            productsData: updatedProductsData // Attach updated products data
+            ...transfer.toObject(), // Spread existing transfer fields
+            productsData: updatedProductsData, // Attach updated products data
+            formattedDate: {
+                full: formattedTransferDate.full,
+                dateOnly: formattedTransferDate.dateOnly,
+                timeOnly: formattedTransferDate.timeOnly,
+                iso: formattedTransferDate.iso
+            }
         };
 
-        // Send the updated sale data
+        console.log("🔍 Transfer Fetched Successfully:", {
+            referenceId: transfer.refferenceId,
+            transferDate: formattedTransferDate.full,
+            transferISO: formattedTransferDate.iso,
+            warehouseFrom: transfer.warehouseFrom,
+            warehouseTo: transfer.warehouseTo,
+            grandTotal: transfer.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
+        // Send the updated transfer data
         res.status(200).json(transferWithUpdatedProducts);
 
     } catch (error) {
@@ -434,7 +508,30 @@ const updateTransfer = async (req, res) => {
 
         await existingTransfer.save(); // Save the updated transfer
 
-        res.status(200).json({ message: 'Transfer updated successfully', transfer: existingTransfer });
+        // Log formatted update time for transfer
+        const formattedUpdateTime = formatToSriLankaTime(existingTransfer.date);
+        console.log("✅ Transfer Updated Successfully:", {
+            referenceId: existingTransfer.refferenceId,
+            updatedAt: formattedUpdateTime.full,
+            updatedAtISO: formattedUpdateTime.iso,
+            warehouseFrom: existingTransfer.warehouseFrom,
+            warehouseTo: existingTransfer.warehouseTo,
+            grandTotal: existingTransfer.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
+        res.status(200).json({ 
+            message: 'Transfer updated successfully', 
+            transfer: {
+                ...existingTransfer.toObject(),
+                formattedDate: {
+                    full: formattedUpdateTime.full,
+                    dateOnly: formattedUpdateTime.dateOnly,
+                    timeOnly: formattedUpdateTime.timeOnly,
+                    iso: formattedUpdateTime.iso
+                }
+            }
+        });
     } catch (error) {
         console.error('Error updating transfer:', error);
         res.status(500).json({ message: 'Error updating transfer', error: error.message });
@@ -727,8 +824,22 @@ const fetchTransferDetails = async (req, res) => {
 
                 const totalTransfers = await Transfer.countDocuments(); // Get the total count of transfers
 
+                // Add formatted dates to paginated transfers
+                const transfersWithFormattedDates = transfers.map(transfer => {
+                    const formattedTime = formatToSriLankaTime(transfer.date);
+                    return {
+                        ...transfer.toObject(),
+                        formattedDate: {
+                            full: formattedTime.full,
+                            dateOnly: formattedTime.dateOnly,
+                            timeOnly: formattedTime.timeOnly,
+                            iso: formattedTime.iso
+                        }
+                    };
+                });
+
                 return res.status(200).json({
-                    transfers,
+                    transfers: transfersWithFormattedDates,
                     totalPages: Math.ceil(totalTransfers / size),
                     currentPage: number,
                     totalTransfers
@@ -736,7 +847,22 @@ const fetchTransferDetails = async (req, res) => {
             } else {
                 // Fetch all transfers without pagination
                 const transfers = await Transfer.find();
-                return res.status(200).json(transfers);
+                
+                // Add formatted dates to all transfers
+                const transfersWithFormattedDates = transfers.map(transfer => {
+                    const formattedTime = formatToSriLankaTime(transfer.date);
+                    return {
+                        ...transfer.toObject(),
+                        formattedDate: {
+                            full: formattedTime.full,
+                            dateOnly: formattedTime.dateOnly,
+                            timeOnly: formattedTime.timeOnly,
+                            iso: formattedTime.iso
+                        }
+                    };
+                });
+                
+                return res.status(200).json(transfersWithFormattedDates);
             }
         }
 
@@ -750,7 +876,22 @@ const fetchTransferDetails = async (req, res) => {
             if (transfers.length === 0) {
                 return res.status(404).json({ message: 'No transfer found for this ID' });
             }
-            return res.status(200).json(transfers);
+            
+            // Add formatted dates to search results
+            const transfersWithFormattedDates = transfers.map(transfer => {
+                const formattedTime = formatToSriLankaTime(transfer.date);
+                return {
+                    ...transfer.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            return res.status(200).json(transfersWithFormattedDates);
         }
 
         // Fetch a specific transfer by ID if provided for update
@@ -788,9 +929,18 @@ const fetchTransferDetails = async (req, res) => {
                 return productData;
             });
 
+            // Format the transfer date for display
+            const formattedTransferDate = formatToSriLankaTime(transfer.date);
+            
             const transferWithUpdatedProducts = {
                 ...transfer.toObject(),
-                productsData: updatedProductsData
+                productsData: updatedProductsData,
+                formattedDate: {
+                    full: formattedTransferDate.full,
+                    dateOnly: formattedTransferDate.dateOnly,
+                    timeOnly: formattedTransferDate.timeOnly,
+                    iso: formattedTransferDate.iso
+                }
             };
 
             return res.status(200).json(transferWithUpdatedProducts);
@@ -834,6 +984,7 @@ const searchTransfers = async (req, res) => {
         // Send the full transfer data
         const formattedTransfers = transfers.map((transfer) => {
             const transferObj = transfer.toObject();
+            const formattedTime = formatToSriLankaTime(transferObj.date);
             
             // Add or modify additional fields if needed
             return {
@@ -844,13 +995,19 @@ const searchTransfers = async (req, res) => {
                 grandTotal: transferObj.grandTotal,
                 orderStatus: transferObj.orderStatus,
                 date: transferObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 discount: transferObj.discount,
                 discountType: transferObj.discountType,
                 shipping: transferObj.shipping,
                 tax: transferObj.tax,
                 productsData: transferObj.productsData, // Include product details
                 createdAt: transferObj.createdAt 
-                    ? transferObj.createdAt.toISOString().slice(0, 10) 
+                    ? formatToSriLankaTime(transferObj.createdAt).dateOnly
                     : null,
             };
         });

@@ -17,6 +17,7 @@ const mongoose = require('mongoose');
 const Cash = require('../../models/posModel/cashModel');
 const { isEmpty } = require('lodash');
 const generateReferenceId = require('../../utils/generateReferenceID');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 //Create purchase
 const createPurchase = async (req, res) => {
@@ -28,6 +29,9 @@ const createPurchase = async (req, res) => {
         // Generate a reference ID for the sale
         const refferenceId = await generateReferenceId('PURCHASE');
         purchaseData.refferenceId = refferenceId;
+        
+        // Always use server UTC time, ignore any frontend date
+        purchaseData.date = new Date();
 
         // Validation checks using isEmpty
         if (isEmpty(purchaseData.warehouse)) {
@@ -36,9 +40,7 @@ const createPurchase = async (req, res) => {
         if (isEmpty(purchaseData.supplier)) {
             return res.status(400).json({ message: 'Supplier is required.', status: 'unsuccess' });
         }
-        if (isEmpty(purchaseData.date)) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        // Note: Date validation removed since we automatically set server time
         if (isEmpty(purchaseData.paymentStatus)) {
             return res.status(400).json({ message: 'Payment Status is required.', status: 'unsuccess' });
         }
@@ -120,8 +122,31 @@ const createPurchase = async (req, res) => {
 
         // Save the purchase after updating product quantities
         await newPruchase.save();
+        
+        // Log formatted creation time
+        const formattedCreationTime = formatToSriLankaTime(newPruchase.date);
+        console.log("✅ Purchase Created Successfully:", {
+            referenceId: newPruchase.refferenceId,
+            createdAt: formattedCreationTime.full,
+            createdAtISO: formattedCreationTime.iso,
+            supplier: newPruchase.supplier,
+            grandTotal: newPruchase.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+        
         await session.commitTransaction();
-        res.status(201).json({ message: 'Purchase saved successfully!', purchase: newPruchase });
+        res.status(201).json({ 
+            message: 'Purchase saved successfully!', 
+            purchase: {
+                ...newPruchase.toObject(),
+                formattedDate: {
+                    full: formattedCreationTime.full,
+                    dateOnly: formattedCreationTime.dateOnly,
+                    timeOnly: formattedCreationTime.timeOnly,
+                    iso: formattedCreationTime.iso
+                }
+            }
+        });
     } catch (error) {
         console.error('Error saving Purchase:', error);
         await session.abortTransaction();
@@ -405,11 +430,29 @@ const findPurchaseById = async (req, res) => {
             };
         });
 
+        // Format the purchase date for display
+        const formattedPurchaseDate = formatToSriLankaTime(purchase.date);
+        
         // Combine purchase with the updated product details
         const purchaseWithUpdatedProducts = {
             ...purchase, // Spread existing purchase fields
-            productsData: updatedProductsData // Attach updated products data
+            productsData: updatedProductsData, // Attach updated products data
+            formattedDate: {
+                full: formattedPurchaseDate.full,
+                dateOnly: formattedPurchaseDate.dateOnly,
+                timeOnly: formattedPurchaseDate.timeOnly,
+                iso: formattedPurchaseDate.iso
+            }
         };
+
+        console.log("🔍 Purchase Fetched Successfully:", {
+            referenceId: purchase.refferenceId,
+            purchaseDate: formattedPurchaseDate.full,
+            purchaseISO: formattedPurchaseDate.iso,
+            supplier: purchase.supplier,
+            grandTotal: purchase.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
 
         // Send the updated purchase data
         res.status(200).json(purchaseWithUpdatedProducts);
@@ -429,9 +472,7 @@ const updatePurchase = async (req, res) => {
         const updateData = req.body; 
 
         // Validation checks
-        if (isEmpty(updateData.date)) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        // Note: Date validation removed - backend automatically handles purchase date with existing date
         if (isEmpty(updateData.paymentStatus)) {
             return res.status(400).json({ message: 'Payment Status is required.', status: 'unsuccess' });
         }
@@ -854,7 +895,17 @@ const fetchPurchases = async (req, res) => {
             if (!purchase) {
                 return res.status(404).json({ message: "Purchase not found" });
             }
-            return res.status(200).json(purchase);
+            
+            const formattedTime = formatToSriLankaTime(purchase.date);
+            return res.status(200).json({
+                ...purchase.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            });
         }
 
         // Fetch purchase by MongoDB ObjectId
@@ -868,7 +919,17 @@ const fetchPurchases = async (req, res) => {
             if (!purchase) {
                 return res.status(404).json({ message: "Purchase not found" });
             }
-            return res.status(200).json(purchase);
+            
+            const formattedTime = formatToSriLankaTime(purchase.date);
+            return res.status(200).json({
+                ...purchase.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            });
         }
 
         // Search purchases by customerName
@@ -884,7 +945,22 @@ const fetchPurchases = async (req, res) => {
             if (purchases.length === 0) {
                 return res.status(404).json({ message: "No purchases found for this customer" });
             }
-            return res.status(200).json(purchases);
+            
+            // Add formatted dates to purchases
+            const purchasesWithFormattedDates = purchases.map(purchase => {
+                const formattedTime = formatToSriLankaTime(purchase.date);
+                return {
+                    ...purchase.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
+            return res.status(200).json(purchasesWithFormattedDates);
         }
         // Fetch all purchases with or without pagination
         const size = parseInt(req.query?.page?.size) || 10; // Default size is 10
@@ -903,9 +979,23 @@ const fetchPurchases = async (req, res) => {
             const total = await Purchase.countDocuments();
             const totalPages = Math.ceil(total / size);
 
+            // Add formatted dates to paginated purchases
+            const purchasesWithFormattedDates = purchases.map(purchase => {
+                const formattedTime = formatToSriLankaTime(purchase.date);
+                return {
+                    ...purchase.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
             return res.status(200).json({
                 message: "Purchases fetched successfully with pagination",
-                data: purchases,
+                data: purchasesWithFormattedDates,
                 total,
                 totalPages,
                 currentPage: number,
@@ -914,7 +1004,22 @@ const fetchPurchases = async (req, res) => {
         }
         // Fetch all without pagination if no pagination queries are provided
         const purchases = await Purchase.find();
-        return res.status(200).json(purchases);
+        
+        // Add formatted dates to all purchases
+        const purchasesWithFormattedDates = purchases.map(purchase => {
+            const formattedTime = formatToSriLankaTime(purchase.date);
+            return {
+                ...purchase.toObject(),
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                }
+            };
+        });
+        
+        return res.status(200).json(purchasesWithFormattedDates);
     } catch (error) {
         console.error("Error handling purchases:", error);
         res.status(500).json({ message: "Error handling purchases", error });

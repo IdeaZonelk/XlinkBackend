@@ -13,14 +13,13 @@ const Quatation = require('../../models/quatationModel')
 const Product = require('../../models/products/product');
 const Customers = require('../../models/customerModel');
 const mongoose = require('mongoose');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 //Create a quotation
 const createQuatation = async (req, res) => {
     try {
         const qatationData = req.body;
-        const newQuatation = new Quatation(qatationData);
-        const productsData = qatationData.productsData; // Extracting productsData from the sale data
-
+        
         // Validate required fields
         if (!qatationData.warehouse) {
             return res.status(400).json({ message: 'Warehouse is required.', status: 'unsuccess' });
@@ -28,9 +27,12 @@ const createQuatation = async (req, res) => {
         if (!qatationData.productsData) {
             return res.status(400).json({ message: 'productsData is required.', status: 'unsuccess' });
         }
-        if (!qatationData.date) {
-            return res.status(400).json({ message: 'Date is required.', status: 'unsuccess' });
-        }
+        
+        // Always use server UTC time, ignore any frontend date
+        qatationData.date = new Date();
+        
+        const newQuatation = new Quatation(qatationData);
+        const productsData = qatationData.productsData; // Extracting productsData from the sale data
 
         // Prepare update promises for product quantities
         const updatePromises = productsData.map(async (product) => {
@@ -62,7 +64,30 @@ const createQuatation = async (req, res) => {
 
         // Save the quatation after successful updates
         await newQuatation.save();
-        return res.status(201).json({ message: 'Quatation saved successfully!', sale: newQuatation });
+        
+        // Log formatted creation time for quotation
+        const formattedQuotationTime = formatToSriLankaTime(newQuatation.date);
+        console.log("✅ Quotation Created Successfully:", {
+            quotationId: newQuatation._id,
+            createdAt: formattedQuotationTime.full,
+            createdAtISO: formattedQuotationTime.iso,
+            customer: newQuatation.customer,
+            grandTotal: newQuatation.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+        
+        return res.status(201).json({ 
+            message: 'Quatation saved successfully!', 
+            sale: {
+                ...newQuatation.toObject(),
+                formattedDate: {
+                    full: formattedQuotationTime.full,
+                    dateOnly: formattedQuotationTime.dateOnly,
+                    timeOnly: formattedQuotationTime.timeOnly,
+                    iso: formattedQuotationTime.iso
+                }
+            }
+        });
     } catch (error) {
         console.error('Error saving quatation:', error);
         return res.status(400).json({ message: error.message, status: 'unsuccess' });
@@ -193,13 +218,31 @@ const findQuatationById = async (req, res) => {
             return productData;
         });
 
+        // Format the quotation date for display
+        const formattedQuotationDate = formatToSriLankaTime(quatation.date);
+        
         // Combine sale with the updated product details
         const quatationWithUpdatedProducts = {
             ...quatation.toObject(), // Spread existing sale fields
             customerName: customerName,
             redeemedPoints: redeemedPoints,
-            productsData: updatedProductsData // Attach updated products data
+            productsData: updatedProductsData, // Attach updated products data
+            formattedDate: {
+                full: formattedQuotationDate.full,
+                dateOnly: formattedQuotationDate.dateOnly,
+                timeOnly: formattedQuotationDate.timeOnly,
+                iso: formattedQuotationDate.iso
+            }
         };
+
+        console.log("🔍 Quotation Fetched Successfully:", {
+            quotationId: quatation._id,
+            quotationDate: formattedQuotationDate.full,
+            quotationISO: formattedQuotationDate.iso,
+            customer: quatation.customer,
+            grandTotal: quatation.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
 
         // Send the updated sale data
         res.status(200).json(quatationWithUpdatedProducts);
@@ -248,9 +291,28 @@ const updateQuatation = async (req, res) => {
             { new: true, runValidators: true } // Return the updated document and validate
         );
 
+        // Log formatted update time for quotation
+        const formattedUpdateTime = formatToSriLankaTime(updatedQuatation.date);
+        console.log("✅ Quotation Updated Successfully:", {
+            quotationId: updatedQuatation._id,
+            updatedAt: formattedUpdateTime.full,
+            updatedAtISO: formattedUpdateTime.iso,
+            customer: updatedQuatation.customer,
+            grandTotal: updatedQuatation.grandTotal,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
         res.status(200).json({
             message: 'Quatation updated successfully',
-            quatation: updatedQuatation,
+            quatation: {
+                ...updatedQuatation.toObject(),
+                formattedDate: {
+                    full: formattedUpdateTime.full,
+                    dateOnly: formattedUpdateTime.dateOnly,
+                    timeOnly: formattedUpdateTime.timeOnly,
+                    iso: formattedUpdateTime.iso
+                }
+            },
         });
     } catch (error) {
         console.error('Error updating Quatation:', error);
@@ -348,9 +410,18 @@ const getQuatation = async (req, res) => {
                 };
             });
 
+            // Format the quotation date for display
+            const formattedQuotationDate = formatToSriLankaTime(quatation.date);
+            
             const quatationWithUpdatedProducts = {
                 ...quatation.toObject(),
                 productsData: updatedProductsData,
+                formattedDate: {
+                    full: formattedQuotationDate.full,
+                    dateOnly: formattedQuotationDate.dateOnly,
+                    timeOnly: formattedQuotationDate.timeOnly,
+                    iso: formattedQuotationDate.iso
+                }
             };
 
             return res.status(200).json(quatationWithUpdatedProducts);
@@ -368,7 +439,21 @@ const getQuatation = async (req, res) => {
                 return res.status(404).json({ message: 'No quotations found for this customer' });
             }
 
-            return res.status(200).json(quatations);
+            // Add formatted dates to quotations
+            const quotationsWithFormattedDates = quatations.map(quotation => {
+                const formattedTime = formatToSriLankaTime(quotation.date);
+                return {
+                    ...quotation.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+
+            return res.status(200).json(quotationsWithFormattedDates);
 
         } else {
             // Fetch all quotations with or without pagination
@@ -391,9 +476,23 @@ const getQuatation = async (req, res) => {
                 const total = await Quatation.countDocuments();
                 const totalPages = Math.ceil(total / size);
 
+                // Add formatted dates to paginated quotations
+                const quotationsWithFormattedDates = quatations.map(quotation => {
+                    const formattedTime = formatToSriLankaTime(quotation.date);
+                    return {
+                        ...quotation.toObject(),
+                        formattedDate: {
+                            full: formattedTime.full,
+                            dateOnly: formattedTime.dateOnly,
+                            timeOnly: formattedTime.timeOnly,
+                            iso: formattedTime.iso
+                        }
+                    };
+                });
+
                 return res.status(200).json({
                     message: 'Quotations fetched successfully with pagination',
-                    data: quatations,
+                    data: quotationsWithFormattedDates,
                     total,
                     totalPages,
                     currentPage: number,
@@ -402,9 +501,24 @@ const getQuatation = async (req, res) => {
             }
 
             const quatations = await Quatation.find().populate('customer', 'name');
+            
+            // Add formatted dates to all quotations
+            const quotationsWithFormattedDates = quatations.map(quotation => {
+                const formattedTime = formatToSriLankaTime(quotation.date);
+                return {
+                    ...quotation.toObject(),
+                    formattedDate: {
+                        full: formattedTime.full,
+                        dateOnly: formattedTime.dateOnly,
+                        timeOnly: formattedTime.timeOnly,
+                        iso: formattedTime.iso
+                    }
+                };
+            });
+            
             return res.status(200).json({
                 message: 'Quotations fetched successfully',
-                data: quatations
+                data: quotationsWithFormattedDates
             });
         }
     } catch (error) {
@@ -448,6 +562,7 @@ const searchQuotation = async (req, res) => {
         // Format quotation data if additional processing is needed
         const formattedQuotations = quotations.map((quotation) => {
             const quotationObj = quotation.toObject();
+            const formattedTime = formatToSriLankaTime(quotationObj.date);
 
             return {
                 _id: quotationObj._id,
@@ -458,6 +573,12 @@ const searchQuotation = async (req, res) => {
                 productsData: quotationObj.productsData, // Include product details
                 status: quotationObj.status, // Example field, adjust based on your schema
                 date: quotationObj.date,
+                formattedDate: {
+                    full: formattedTime.full,
+                    dateOnly: formattedTime.dateOnly,
+                    timeOnly: formattedTime.timeOnly,
+                    iso: formattedTime.iso
+                },
                 discount: quotationObj.discount,
                 discountType: quotationObj.discountType,
                 grandTotal: quotationObj.grandTotal,
@@ -468,7 +589,7 @@ const searchQuotation = async (req, res) => {
                 shipping: quotationObj.shipping,
                 tax: quotationObj.tax,
                 createdAt: quotationObj.createdAt
-                    ? quotationObj.createdAt.toISOString().slice(0, 10)
+                    ? formatToSriLankaTime(quotationObj.createdAt).dateOnly
                     : null,
             };
         });

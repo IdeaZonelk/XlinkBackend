@@ -21,9 +21,10 @@ const fs = require('fs');
 const ZReading = require('../../models/zBillRecord');
 const mongoose = require('mongoose');
 const { log } = require('console');
+const { formatToSriLankaTime } = require('../../utils/timeZone');
 
 const cashHandIn = async (req, res) => {
-    const { cashAmount, username, name, openTime,
+    const { cashAmount, username, name,
         oneRupee, twoRupee, fiveRupee, tenRupee, twentyRupee, fiftyRupee, hundredRupee, fiveHundredRupee, thousandRupee, fiveThousandRupee } = req.body;
     try {
         const existingUser = await Cash.findOne({ username });
@@ -34,6 +35,9 @@ const cashHandIn = async (req, res) => {
             });
         }
         const currentCash = await Cash.findOne();
+
+        // Use server UTC time for openTime like other controllers
+        const openTime = new Date();
 
         if (currentCash) {
             currentCash.totalBalance += cashAmount;
@@ -50,6 +54,18 @@ const cashHandIn = async (req, res) => {
                 oneRupee, twoRupee, fiveRupee, tenRupee, twentyRupee, fiftyRupee, hundredRupee, fiveHundredRupee, thousandRupee, fiveThousandRupee
             });
             await newCash.save();
+            
+            // Log formatted cash register opening time
+            const formattedOpenTime = formatToSriLankaTime(openTime);
+            console.log("✅ Cash Register Opened Successfully:", {
+                username: username,
+                cashierName: name,
+                openedAt: formattedOpenTime.full,
+                openedAtISO: formattedOpenTime.iso,
+                cashHandIn: cashAmount,
+                timezone: "Sri Lanka Time (UTC+05:30)"
+            });
+            
             return res.status(201).json({ message: 'New cash record created successfully', cash: newCash });
         }
     } catch (error) {
@@ -90,8 +106,9 @@ const findAllProductsForPos = async (req, res) => {
         const Allproduct = products.map(product => {
             const productObj = product.toObject();
 
-            // Format the createdAt date to YYYY-MM-DD
-            const formattedCreatedAt = productObj.createdAt.toISOString().slice(0, 10);
+            // Format the createdAt date using timezone utility
+            const formattedCreatedAtTime = formatToSriLankaTime(productObj.createdAt);
+            const formattedCreatedAt = formattedCreatedAtTime.dateOnly;
 
             // Convert variationValues Map to a regular object
             const formattedVariationValues = {};
@@ -175,8 +192,9 @@ const findProductByKeyword = async (req, res) => {
 
         const productObj = product.toObject();
 
-        // Format the createdAt date to YYYY-MM-DD
-        const formattedCreatedAt = productObj.createdAt.toISOString().slice(0, 10);
+        // Format the createdAt date using timezone utility
+        const formattedCreatedAtTime = formatToSriLankaTime(productObj.createdAt);
+        const formattedCreatedAt = formattedCreatedAtTime.dateOnly;
 
         // Convert variationValues Map to a regular object
         const formattedVariationValues = {};
@@ -385,7 +403,8 @@ const getProductsByIds = async (req, res) => {
         }
         const productsData = products.map(product => {
             const productObj = product.toObject();
-            const formattedCreatedAt = productObj.createdAt ? productObj.createdAt.toISOString().slice(0, 10) : null;
+            const formattedCreatedAtTime = productObj.createdAt ? formatToSriLankaTime(productObj.createdAt) : null;
+            const formattedCreatedAt = formattedCreatedAtTime ? formattedCreatedAtTime.dateOnly : null;
 
             const formattedVariationValues = {};
             if (productObj.variationValues) {
@@ -532,8 +551,9 @@ const findProducts = async (req, res) => {
         const formattedProducts = products.map((product) => {
             const productObj = { ...product };
 
-            // Format the createdAt date to YYYY-MM-DD
-            productObj.createdAt = productObj.createdAt ? productObj.createdAt.toISOString().slice(0, 10) : null;
+            // Format the createdAt date using timezone utility
+            const formattedCreatedAtTime = productObj.createdAt ? formatToSriLankaTime(productObj.createdAt) : null;
+            productObj.createdAt = formattedCreatedAtTime ? formattedCreatedAtTime.dateOnly : null;
 
             // Ensure warehouse information is correctly included
             if (productObj.warehouse && typeof productObj.warehouse === 'object') {
@@ -618,6 +638,7 @@ const getAdminPasswordForDiscount = async (req, res) => {
 };
 
 const saveZReading = async (req, res) => {
+    // Use server UTC time for closed time
     const closedTime = new Date();
     try {
         const records = Array.isArray(req.body) ? req.body : [req.body];
@@ -680,6 +701,16 @@ const saveZReading = async (req, res) => {
         const zReadingDoc = new ZReading({ registers: validRegisters });
         const savedDoc = await zReadingDoc.save();
 
+        // Log formatted creation time for Z-reading
+        const formattedCreationTime = formatToSriLankaTime(savedDoc.createdAt);
+        console.log("✅ Z-Reading Saved Successfully:", {
+            zReadingId: savedDoc._id,
+            savedAt: formattedCreationTime.full,
+            savedAtISO: formattedCreationTime.iso,
+            registersCount: validRegisters.length,
+            timezone: "Sri Lanka Time (UTC+05:30)"
+        });
+
         const statusCode = failedRecords.length === 0 ? 201 : 207;
 
         return res.status(statusCode).json({
@@ -733,35 +764,55 @@ const getAllZReadingDetails = async (req, res) => {
             });
         }
 
-        // Format openedTime and closedTime
+        // Format openedTime and closedTime using timezone utility
         const formattedZReadings = zReadingDetails.map(z => {
+            // Format the main createdAt date for the Z-reading document
+            const formattedCreatedAtTime = formatToSriLankaTime(z.createdAt);
+            z.formattedCreatedAt = formattedCreatedAtTime.dateOnly;
+            z.formattedCreatedAtFull = {
+                full: formattedCreatedAtTime.full,
+                dateOnly: formattedCreatedAtTime.dateOnly,
+                timeOnly: formattedCreatedAtTime.timeOnly,
+                iso: formattedCreatedAtTime.iso
+            };
+
             // Safety check: ensure registers array exists before mapping
             if (z.registers && Array.isArray(z.registers)) {
                 z.registers = z.registers.map(r => {
+                    // Format openedTime using timezone utility
                     if (r.openedTime) {
-                        const openDate = new Date(r.openedTime);
-                        const day = String(openDate.getDate()).padStart(2, '0');
-                        const month = String(openDate.getMonth() + 1).padStart(2, '0');
-                        const year = openDate.getFullYear();
-                        const hours = String(openDate.getHours()).padStart(2, '0');
-                        const minutes = String(openDate.getMinutes()).padStart(2, '0');
-                        const seconds = String(openDate.getSeconds()).padStart(2, '0');
-
-                        r.openedTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                        // Ensure openedTime is a valid Date object
+                        let openedTimeDate = r.openedTime;
+                        if (typeof r.openedTime === 'string') {
+                            openedTimeDate = new Date(r.openedTime);
+                        }
+                        
+                        const formattedOpenedTime = formatToSriLankaTime(openedTimeDate);
+                        r.openedTime = formattedOpenedTime.full;
+                        r.formattedOpenedTime = {
+                            full: formattedOpenedTime.full,
+                            dateOnly: formattedOpenedTime.dateOnly,
+                            timeOnly: formattedOpenedTime.timeOnly,
+                            iso: formattedOpenedTime.iso
+                        };
                     }
 
-                    // Format closedTime (convert to Sri Lanka Time +05:30)
+                    // Format closedTime using timezone utility
                     if (r.closedTime) {
-                        const closeDate = new Date(r.closedTime);
-                        const slTime = new Date(closeDate.getTime() + 5.5 * 60 * 60 * 1000);
-                        const day = String(slTime.getUTCDate()).padStart(2, '0');
-                        const month = String(slTime.getUTCMonth() + 1).padStart(2, '0');
-                        const year = slTime.getUTCFullYear();
-                        const hours = String(slTime.getUTCHours()).padStart(2, '0');
-                        const minutes = String(slTime.getUTCMinutes()).padStart(2, '0');
-                        const seconds = String(slTime.getUTCSeconds()).padStart(2, '0');
-
-                        r.closedTime = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                        // Ensure closedTime is a valid Date object
+                        let closedTimeDate = r.closedTime;
+                        if (typeof r.closedTime === 'string') {
+                            closedTimeDate = new Date(r.closedTime);
+                        }
+                        
+                        const formattedClosedTime = formatToSriLankaTime(closedTimeDate);
+                        r.closedTime = formattedClosedTime.full;
+                        r.formattedClosedTime = {
+                            full: formattedClosedTime.full,
+                            dateOnly: formattedClosedTime.dateOnly,
+                            timeOnly: formattedClosedTime.timeOnly,
+                            iso: formattedClosedTime.iso
+                        };
                     }
 
                     return r;
@@ -772,6 +823,14 @@ const getAllZReadingDetails = async (req, res) => {
                 z.registers = [];
             }
             return z;
+        });
+
+        console.log(`📊 Z-Reading Details Fetched Successfully:`, {
+            totalRecords: totalZReadings,
+            recordsReturned: zReadingDetails.length,
+            currentPage: page,
+            totalPages: Math.ceil(totalZReadings / size),
+            timezone: "Sri Lanka Time (UTC+05:30)"
         });
 
         res.status(200).json({
@@ -824,42 +883,63 @@ const getAllZReadingByDate = async (req, res) => {
             });
         }
 
-        // Convert openedTime and closedTime to Sri Lanka timezone format: dd/mm/yyyy hh:mm:ss
+        // Convert openedTime and closedTime to Sri Lanka timezone format using utility
         zReadingDetails = zReadingDetails.map(zReading => {
+            // Format the main createdAt date for the Z-reading document
+            const formattedCreatedAtTime = formatToSriLankaTime(zReading.createdAt);
+            
             const updatedRegisters = zReading.registers.map(register => {
-                const openedTimeSLT = new Date(register.openedTime).toLocaleString('en-GB', {
-                    timeZone: 'Asia/Colombo',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                }).replace(',', '');
-
-                const closedTimeSLT = new Date(register.closedTime).toLocaleString('en-GB', {
-                    timeZone: 'Asia/Colombo',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                }).replace(',', '');
+                // Ensure openedTime is a valid Date object
+                let openedTimeDate = register.openedTime;
+                if (typeof register.openedTime === 'string') {
+                    openedTimeDate = new Date(register.openedTime);
+                }
+                
+                // Ensure closedTime is a valid Date object
+                let closedTimeDate = register.closedTime;
+                if (typeof register.closedTime === 'string') {
+                    closedTimeDate = new Date(register.closedTime);
+                }
+                
+                const formattedOpenedTime = formatToSriLankaTime(openedTimeDate);
+                const formattedClosedTime = formatToSriLankaTime(closedTimeDate);
 
                 return {
                     ...register._doc,
-                    openedTime: openedTimeSLT,
-                    closedTime: closedTimeSLT
+                    openedTime: formattedOpenedTime.full,
+                    closedTime: formattedClosedTime.full,
+                    formattedOpenedTime: {
+                        full: formattedOpenedTime.full,
+                        dateOnly: formattedOpenedTime.dateOnly,
+                        timeOnly: formattedOpenedTime.timeOnly,
+                        iso: formattedOpenedTime.iso
+                    },
+                    formattedClosedTime: {
+                        full: formattedClosedTime.full,
+                        dateOnly: formattedClosedTime.dateOnly,
+                        timeOnly: formattedClosedTime.timeOnly,
+                        iso: formattedClosedTime.iso
+                    }
                 };
             });
 
             return {
                 ...zReading._doc,
-                registers: updatedRegisters
+                registers: updatedRegisters,
+                formattedCreatedAt: formattedCreatedAtTime.dateOnly,
+                formattedCreatedAtFull: {
+                    full: formattedCreatedAtTime.full,
+                    dateOnly: formattedCreatedAtTime.dateOnly,
+                    timeOnly: formattedCreatedAtTime.timeOnly,
+                    iso: formattedCreatedAtTime.iso
+                }
             };
+        });
+
+        console.log(`📅 Z-Reading Details by Date Fetched Successfully:`, {
+            requestedDate: date,
+            recordsFound: zReadingDetails.length,
+            timezone: "Sri Lanka Time (UTC+05:30)"
         });
 
         res.status(200).json({

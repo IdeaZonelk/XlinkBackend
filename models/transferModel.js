@@ -37,7 +37,8 @@ const transferSchema = new mongoose.Schema({
     orderStatus: { type: String, required: true },
     grandTotal: { type: Number, required: true },
     productsData: { type: [productSchema], required: true },
-});
+}, { timestamps: true });   
+;
 
 const Transfer = mongoose.model('transfer', transferSchema);
 module.exports = Transfer;
